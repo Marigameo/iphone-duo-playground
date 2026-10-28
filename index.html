@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <title>iPhone Duo playground</title>
+  <meta name="description" content="See any website at the viewports Safari 27.1 really gives it on iPhone Duo: closed, open, turned and in Split View, with Safari's bars and the crease where they are.">
+  <link rel="stylesheet" href="playground.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <svg class="glyph" width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
+        <rect x="1.75" y="3.75" width="18.5" height="14.5" rx="3.5" fill="none" stroke="currentColor" stroke-width="1.5"/>
+        <line x1="11" y1="3.75" x2="11" y2="18.25" stroke="currentColor" stroke-width="1.2" stroke-dasharray="1.6 1.6"/>
+      </svg>
+      <h1>iPhone Duo playground</h1>
+    </div>
+    <div class="top-actions">
+      <button id="openSite" class="btn" type="button">
+        <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M16.5 16.5L21 21" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+        <span>Your site</span>
+      </button>
+      <button id="menuBtn" class="btn icon" type="button" aria-label="More" aria-haspopup="dialog" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.8" fill="currentColor"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/><circle cx="19" cy="12" r="1.8" fill="currentColor"/></svg>
+      </button>
+      <button id="theme" class="btn icon" type="button" aria-label="Switch between light and dark">
+        <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 019.5 4a8.5 8.5 0 1010.5 10.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="stage" id="stage" aria-label="iPhone Duo preview">
+    <div class="scaler" id="scaler">
+      <div class="rig" id="rig">
+        <div class="device" id="device">
+          <div class="glass"></div>
+          <i class="seam a" id="seamA" hidden></i><i class="seam b" id="seamB" hidden></i>
+          <div class="screen" id="screen">
+            <div class="vp" id="vp"><iframe id="frame" title="Website preview" referrerpolicy="no-referrer"></iframe></div>
+            <div class="chrome" id="chrome"></div>
+            <div class="crease" id="crease" hidden></div>
+          </div>
+        </div>
+        <div class="foldfx" id="foldfx" hidden aria-hidden="true">
+          <div class="veil" id="veil"></div>
+          <div class="flap" id="flap">
+            <div class="face inner"><i class="pane"></i><i class="sheen"></i></div>
+            <div class="face outer"><i class="pane"></i><i class="island"></i><i class="sheen"></i></div>
+          </div>
+        </div>
+      </div>
+      <div class="fold-hint" id="foldHint" hidden>
+        <button type="button" id="foldHintBtn" aria-expanded="false" aria-controls="foldTip">
+          <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M12 11v6M12 7.2v.1" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>
+          Fold
+        </button>
+        <p class="fold-tip" id="foldTip" role="tooltip">The fold. Partly folded, the screen curves here and small controls are hard to tap. Keep buttons, links and fields off this line; text and images can cross it. From Apple's guidelines for iPhone Duo.</p>
+      </div>
+    </div>
+  </main>
+
+  <div class="dock">
+    <p class="caption" id="caption" aria-live="polite"></p>
+    <div class="toolbar" role="toolbar" aria-label="Preview settings">
+      <div class="seg poses" role="radiogroup" aria-label="Pose" id="poses"></div>
+      <span class="sep" aria-hidden="true"></span>
+      <div class="seg" role="radiogroup" aria-label="Safari bars" id="bars">
+        <button type="button" role="radio" aria-checked="true" data-v="svh" title="Safari bars shown">Bars</button>
+        <button type="button" role="radio" aria-checked="false" data-v="lvh" title="Safari bars hidden, as after scrolling">Scrolled</button>
+      </div>
+      <span class="sep" aria-hidden="true" id="foldSep"></span>
+      <div class="seg" role="radiogroup" aria-label="Fold" id="fold">
+        <button type="button" role="radio" aria-checked="true" data-v="flat">Flat</button>
+        <button type="button" role="radio" aria-checked="false" data-v="folded">Folded</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="sheet-backdrop" id="sheet" hidden>
+    <form class="sheet" id="sheetForm" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+      <h2 id="sheetTitle">Open a website</h2>
+      <label class="sr-only" for="url">Website address</label>
+      <input id="url" type="url" placeholder="your-site.com" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="url">
+      <p class="sheet-note">Some sites refuse to be shown inside another page. If yours stays blank, run the playground locally or let the <a href="https://github.com/marigameo/skills" rel="noopener">fit-iphone-duo skill</a> open it in a real browser.</p>
+      <div class="sheet-actions">
+        <button type="button" class="btn quiet" id="useSample">Show the sample page</button>
+        <span class="grow"></span>
+        <button type="button" class="btn" id="cancel">Cancel</button>
+        <button type="submit" class="btn primary">Open</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="menu" id="menu" role="dialog" aria-label="More" hidden>
+    <section>
+      <h3>Page colour</h3>
+      <p class="menu-note">Safari fills the space behind its bars with the page's background colour. It's read from the page when the browser allows; set it here when it can't be.</p>
+      <div class="swatch-row">
+        <label class="swatch"><input type="color" id="bg" value="#ffffff" aria-label="Page background colour"><span id="bgv">#ffffff</span></label>
+        <button type="button" class="btn small" id="bgAuto">Read from page</button>
+      </div>
+    </section>
+    <section>
+      <div class="switch-row">
+        <label for="flags"><h3>Safari feature flags</h3></label>
+        <input type="checkbox" id="flags" class="switch" role="switch">
+      </div>
+      <p class="menu-note">The page sees Device Posture and Viewport Segments, as in Safari 27.1 with both flags turned on. Fold the open device to see segments appear. Off, the APIs are absent, as in Safari by default. Works on the sample page and pages from the same origin; reloads the page.</p>
+    </section>
+    <section>
+      <h3>Use the numbers</h3>
+      <div class="export-row">
+        <button type="button" class="btn small" id="copyLink">Copy link to this view</button>
+        <button type="button" class="btn small" id="copyPresets">Copy Playwright presets</button>
+        <a class="btn small" href="poses.json" download>poses.json</a>
+      </div>
+    </section>
+    <section>
+      <h3>The numbers</h3>
+      <table id="table">
+        <thead><tr><th scope="col">Pose</th><th scope="col">Width</th><th scope="col">Height</th><th scope="col">Scrolled</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <p class="menu-note">Viewport sizes in CSS pixels, from WebKit. Where Safari draws its bars inside the screen is approximate. All in <a href="poses.json">poses.json</a>, which the skill reads too.</p>
+      <p class="menu-note" id="sources"></p>
+    </section>
+    <section>
+      <p class="menu-note">Made by <a href="https://mariappan.netlify.app" rel="noopener">Mari</a> with the <a href="https://github.com/marigameo/skills" rel="noopener">fit-iphone-duo skill</a>. Rendered by your browser, not Safari. iPhone is a trademark of Apple Inc. This page is not affiliated with Apple.</p>
+    </section>
+  </div>
+
+  <script src="duo-flags.js"></script>
+  <script src="playground.js"></script>
+</body>
+</html>
