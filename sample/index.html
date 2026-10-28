@@ -123,6 +123,13 @@
     .notice p { margin: 0; flex: 1; }
     .notice button { flex: none; border: 0; border-radius: 10px; padding: 9px 14px; background: var(--bg); color: var(--ink); font-weight: 600; cursor: pointer; }
     .notice.gone { transform: translateY(140%); opacity: 0; pointer-events: none; }
+    /* On a short screen (closed and turned, 368px tall) a floating notice would sit on the page's own buttons:
+       it joins the page's flow at the end instead, still dismissible. */
+    @media (max-height: 420px) {
+      .notice { position: static; margin: 0 var(--pad) 24px; max-width: none; box-shadow: none; }
+      .notice.gone { display: none; }
+      footer { padding-bottom: 24px; }
+    }
 
     /* Fold-aware, for browsers that report segments (Safari 27.1 with its flag on): the CTA gap and the
        grid gutter widen to span the fold, and nothing else moves (Apple: move only what's necessary). */
