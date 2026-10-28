@@ -12,6 +12,9 @@
   --fill: light-dark(rgba(120, 120, 128, 0.12), rgba(120, 120, 128, 0.24));
   --accent: light-dark(#007aff, #0a84ff);
   --crease: light-dark(#ff3b30, #ff453a);
+  --thumb: light-dark(#ffffff, #636366);
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
   --font: -apple-system, "SF Pro Text", "SF Pro Display", system-ui, "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
 :root[data-theme="light"] { color-scheme: light; }
@@ -31,7 +34,6 @@ body {
   overflow: hidden;
 }
 a { color: var(--accent); text-decoration: none; }
-a:hover { text-decoration: underline; }
 [hidden] { display: none !important; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
@@ -51,10 +53,32 @@ h1 { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; margin: 0; whit
   background: var(--fill); border: 0; border-radius: 999px;
   padding: 0 14px; height: 34px; cursor: pointer;
   display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap;
+  position: relative; transition: background-color 150ms ease, transform 160ms var(--ease-out);
 }
-.btn:hover { background: color-mix(in srgb, var(--fill), var(--ink) 6%); }
+.btn:active { transform: scale(0.97); }
+.btn span { transition: filter 120ms ease, opacity 120ms ease; }
+.btn.swap span { filter: blur(2px); opacity: 0; }
 .btn.primary { background: var(--accent); color: #fff; font-weight: 600; }
-.btn.primary:hover { background: color-mix(in srgb, var(--accent), #000 8%); }
+/* Hover only where there is a real pointer: on touch it sticks after a tap */
+@media (hover: hover) and (pointer: fine) {
+  a:hover { text-decoration: underline; }
+  .btn:hover { background: color-mix(in srgb, var(--fill), var(--ink) 6%); }
+  .btn.primary:hover { background: color-mix(in srgb, var(--accent), #000 8%); }
+  .fold-hint button:hover { color: var(--ink); }
+}
+/* A finger needs 44pt; the controls stay their size and only the touch area grows */
+@media (pointer: coarse) {
+  .seg button::before, .top .btn::before { content: ""; position: absolute; inset: -7px 0; }
+  .top .btn::before { inset: -5px 0; }
+}
+#theme { display: inline-grid; }
+#theme svg { grid-area: 1 / 1; transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out); }
+#theme .sun, :root[data-theme="dark"] #theme .moon { opacity: 0; transform: rotate(-60deg) scale(0.6); }
+:root[data-theme="dark"] #theme .sun { opacity: 1; transform: none; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) #theme .moon { opacity: 0; transform: rotate(-60deg) scale(0.6); }
+  :root:not([data-theme="light"]) #theme .sun { opacity: 1; transform: none; }
+}
 .btn.quiet { background: transparent; color: var(--accent); padding: 0 4px; }
 .btn.icon { width: 34px; padding: 0; }
 .btn.small { height: 28px; font-size: 13px; padding: 0 10px; }
@@ -83,6 +107,10 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid 
 .seam { position: absolute; background: #141416; border-radius: 1px; }
 .screen { position: absolute; overflow: hidden; background: var(--page-bg, #fff); border-radius: var(--r-screen, 38px); isolation: isolate; }
 .vp { position: absolute; overflow: hidden; background: var(--page-bg, #fff); z-index: 1; }
+/* Chromium bug workaround: after the device changes size and the page moves (outer screen → Split View), Chromium
+   left the page's fixed elements drawn without their text until something repainted them. Keeping the page on its
+   own layer prevents it; text sharpness and frame rate measured unchanged (DESIGN.md §Device). */
+.vp { will-change: transform; }
 .vp iframe { display: block; width: 100%; height: 100%; border: 0; background: transparent; }
 .chrome { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
 .chrome .hit { pointer-events: auto; }
@@ -126,6 +154,14 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid 
 button.ic { border: 0; background: none; padding: 0; cursor: pointer; font: inherit; border-radius: 12px; }
 button.ic:active:not(.dim) { background: rgba(120, 120, 128, 0.16); }
 button.ic.dim { cursor: default; }
+/* Safari's load progress, along the bottom of the address field. The playground can't see another site's real
+   progress, so it creeps towards 90% and completes on load (DESIGN.md §Safari's bars) */
+.pill::after, .mini::after {
+  content: ""; position: absolute; left: 14px; right: 14px; bottom: 0; height: 2.5px; border-radius: 2px;
+  background: var(--accent); transform: scaleX(0); transform-origin: left; opacity: 0; pointer-events: none;
+}
+.chrome.loading .pill::after, .chrome.loading .mini::after { opacity: 1; transform: scaleX(0.9); transition: transform 6s var(--ease-out); }
+.chrome.loaded .pill::after, .chrome.loaded .mini::after { opacity: 0; transform: scaleX(1); transition: transform 200ms var(--ease-out), opacity 250ms ease 200ms; }
 .mini { border: 0; background: none; color: var(--bar-ink); font: 600 13px/1 var(--font); cursor: text; padding: 6px 10px; justify-self: center; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .home { position: absolute; bottom: 8px; left: 50%; width: 140px; height: 5px; margin-left: -70px; border-radius: 3px; background: var(--home); z-index: 4; pointer-events: none; }
@@ -149,7 +185,7 @@ button.ic.dim { cursor: default; }
 .crease { position: absolute; pointer-events: none; z-index: 5; }
 .crease.v { top: 0; bottom: 0; width: 0; border-left: 1px solid rgba(0, 0, 0, 0.12); }
 .crease.h { left: 0; right: 0; height: 0; border-top: 1px solid rgba(0, 0, 0, 0.12); }
-.crease::before, .crease::after { content: ""; position: absolute; opacity: 0; transition: opacity 460ms cubic-bezier(0.32, 0.72, 0, 1); }
+.crease::before, .crease::after { content: ""; position: absolute; opacity: 0; transition: opacity 460ms var(--ease-drawer); }
 .crease.v::before { top: 0; bottom: 0; left: -14px; width: 28px; background: linear-gradient(90deg, rgba(0,0,0,0) 0%, rgba(0,0,0,.16) 42%, rgba(0,0,0,.22) 50%, rgba(0,0,0,.16) 58%, rgba(0,0,0,0) 100%); }
 .crease.h::before { left: 0; right: 0; top: -14px; height: 28px; background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,.16) 42%, rgba(0,0,0,.22) 50%, rgba(0,0,0,.16) 58%, rgba(0,0,0,0) 100%); }
 .crease.v::after { top: 0; bottom: 0; left: -1px; border-left: 2px dashed var(--crease); }
@@ -159,7 +195,7 @@ button.ic.dim { cursor: default; }
 
 /* Smooth state changes (DESIGN.md §Motion) */
 @keyframes soft-in { from { opacity: 0; } }
-.vp.glide { transition: top 420ms cubic-bezier(0.32, 0.72, 0, 1), height 420ms cubic-bezier(0.32, 0.72, 0, 1); }
+.vp.glide { transition: top 420ms var(--ease-drawer), height 420ms var(--ease-drawer); }
 .chrome.fade .bar > *, .chrome.fade .home, .chrome.fade .other { animation: soft-in 320ms ease both; }
 .fold-hint:not([hidden]) { animation: soft-in 420ms ease 120ms both; }
 
@@ -173,7 +209,7 @@ button.ic.dim { cursor: default; }
   -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
   border: 0.5px solid var(--line); border-radius: 999px; cursor: help; white-space: nowrap;
 }
-.fold-hint button:hover, .fold-hint button[aria-expanded="true"] { color: var(--ink); }
+.fold-hint button[aria-expanded="true"] { color: var(--ink); }
 .fold-hint.v { transform: translate(-50%, -100%); padding-bottom: 8px; }
 .fold-hint.v::after { content: ""; position: absolute; left: 50%; bottom: 1px; height: 6px; border-left: 1px solid var(--line); }
 .fold-hint.h { transform: translate(-100%, -50%); padding-right: 8px; }
@@ -181,11 +217,17 @@ button.ic.dim { cursor: default; }
 .fold-tip {
   position: absolute; width: 260px; margin: 0; padding: 10px 12px; font-size: 13px; line-height: 1.45; color: var(--ink);
   background: var(--surface-solid); border-radius: 12px; box-shadow: 0 12px 32px -10px rgba(0, 0, 0, 0.3), 0 0 0 0.5px var(--line);
-  opacity: 0; visibility: hidden; transition: opacity 220ms ease, visibility 220ms, margin-top 220ms ease; margin-top: -3px; pointer-events: none;
+  opacity: 0; visibility: hidden; pointer-events: none; transform: var(--tx, none) scale(0.97); transform-origin: top left;
+  transition: opacity 100ms var(--ease-out), transform 100ms var(--ease-out), visibility 0s 100ms;
 }
-.fold-hint.v .fold-tip { left: 50%; top: calc(100% + 4px); transform: translateX(-50%); }
+.fold-hint.v .fold-tip { left: 50%; top: calc(100% + 4px); --tx: translateX(-50%); transform-origin: top center; }
 .fold-hint.h .fold-tip { left: 0; top: calc(100% + 6px); }
-.fold-hint:hover .fold-tip, .fold-hint:focus-within .fold-tip, .fold-hint.open .fold-tip { opacity: 1; visibility: visible; margin-top: 0; }
+/* Open when pressed, on keyboard focus, or after a moment of mouse hover (.hover, set in playground.js);
+   "shut" keeps it closed after a second press until the pointer or focus leaves */
+.fold-hint.open .fold-tip, .fold-hint:not(.shut):is(.hover, :has(:focus-visible)) .fold-tip {
+  opacity: 1; visibility: visible; transform: var(--tx, none);
+  transition: opacity 150ms var(--ease-out), transform 150ms var(--ease-out), visibility 0s;
+}
 
 /* The fold animation: the cover swings on the hinge as frosted glass; the screen under it un-blurs */
 .foldfx { position: absolute; left: 0; top: 0; pointer-events: none; perspective: 3200px; z-index: 7; }
@@ -218,25 +260,52 @@ button.ic.dim { cursor: default; }
 
 .toolbar {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center;
-  padding: 5px; border-radius: 16px;
+  padding: 5px; border-radius: 16px; position: relative; isolation: isolate;
+  max-width: 100%;
+}
+/* The toolbar's material is its own layer, so it can stretch to a new width without stretching the controls
+   (playground.js, flipToolbar). Its groups slide to their new places from where they were. */
+.toolbar::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit;
   background: var(--surface); -webkit-backdrop-filter: blur(24px) saturate(1.6); backdrop-filter: blur(24px) saturate(1.6);
   border: 0.5px solid var(--line);
   box-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.18);
-  max-width: 100%;
+  transform: translate(var(--tx, 0), var(--ty, 0)) scale(var(--sx, 1), var(--sy, 1));
+  transition: transform 260ms var(--ease-out);
 }
+.toolbar > * { transition: transform 260ms var(--ease-out), opacity 200ms var(--ease-out); }
+@starting-style { .toolbar > * { opacity: 0; } }
+.toolbar.flip::before, .toolbar.flip > * { transition: none; }
 .sep { width: 1px; height: 22px; background: var(--line); flex: none; }
-.seg { display: flex; background: var(--fill); border-radius: 11px; padding: 2px; gap: 2px; }
-.seg button {
+.seg { position: relative; display: flex; background: var(--fill); border-radius: 11px; padding: 2px; gap: 2px; }
+.seg button, .seg .on i {
   font: 500 13px/1 var(--font); color: var(--ink);
   background: transparent; border: 0; border-radius: 9px; padding: 0 11px; height: 30px;
-  cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;
+  cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
 }
-.seg button svg { width: 18px; height: 18px; flex: none; }
-.seg button[aria-checked="true"] { background: var(--surface-solid); font-weight: 600; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 0 0 0.5px rgba(0, 0, 0, 0.04); }
+.seg button { position: relative; transition: opacity 200ms ease; }
+/* Feedback on press, as iOS dims a segment under the finger; the choice still commits on release */
+.seg button:active { opacity: 0.5; transition: none; }
+.seg button svg, .seg .on svg { width: 18px; height: 18px; flex: none; }
+/* The selected segment: a copy of the row in the selected style, clipped to the chosen segment. Moving the clip
+   slides the thumb, label weight and colour together, with no text shift (DESIGN.md §Motion) */
+.seg .on { position: absolute; inset: 2px; pointer-events: none; filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.14)); }
+.seg .on > span { display: flex; gap: 2px; width: max-content; background: var(--thumb); transition: clip-path 260ms var(--ease-out); }
+.seg .on i { font-style: normal; font-weight: 600; padding: 0; flex: none; }
 
 /* Sheet for the address */
 .sheet-backdrop { position: fixed; inset: 0; z-index: 20; background: rgba(0, 0, 0, 0.28); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); display: grid; align-items: start; justify-items: center; padding: 14vh 16px 16px; }
 .sheet { width: min(520px, 100%); background: var(--surface-solid); border-radius: 22px; padding: 20px; box-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.4); display: grid; gap: 12px; }
+/* The sheet and the menu ease in and leave faster; the menu grows from the ⋯ button (DESIGN.md §Motion) */
+.sheet-backdrop, .sheet, .menu { transition: opacity 220ms var(--ease-out), transform 220ms var(--ease-out), display 220ms allow-discrete; }
+.sheet-backdrop[hidden], .sheet-backdrop[hidden] .sheet, .menu[hidden] { opacity: 0; transition-duration: 140ms; pointer-events: none; }
+.sheet-backdrop[hidden] .sheet { transform: scale(0.97); }
+.menu[hidden] { transform: scale(0.96); }
+@starting-style {
+  .sheet-backdrop:not([hidden]), .sheet-backdrop:not([hidden]) .sheet, .menu:not([hidden]) { opacity: 0; }
+  .sheet-backdrop:not([hidden]) .sheet { transform: scale(0.97); }
+  .menu:not([hidden]) { transform: scale(0.96); }
+}
 .sheet h2 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
 .sheet input { font: 17px var(--font); color: var(--ink); background: var(--fill); border: 0; border-radius: 12px; padding: 0 14px; height: 46px; width: 100%; }
 .sheet input::placeholder { color: var(--muted); }
@@ -245,7 +314,7 @@ button.ic.dim { cursor: default; }
 .grow { flex: 1; }
 
 /* Menu */
-.menu { position: fixed; z-index: 15; top: 54px; right: max(16px, env(safe-area-inset-right)); width: min(360px, calc(100vw - 32px)); max-height: calc(100dvh - 70px); overflow: auto; background: var(--surface-solid); border-radius: 18px; padding: 6px 16px; box-shadow: 0 24px 60px -16px rgba(0, 0, 0, 0.35), 0 0 0 0.5px var(--line); }
+.menu { position: fixed; z-index: 15; top: 54px; right: max(16px, env(safe-area-inset-right)); width: min(360px, calc(100vw - 32px)); max-height: calc(100dvh - 70px); overflow: auto; transform-origin: calc(100% - 57px) 0; background: var(--surface-solid); border-radius: 18px; padding: 6px 16px; box-shadow: 0 24px 60px -16px rgba(0, 0, 0, 0.35), 0 0 0 0.5px var(--line); }
 .menu section { padding: 12px 0; border-bottom: 0.5px solid var(--line); }
 .menu section:last-child { border-bottom: 0; }
 .menu h3 { margin: 0 0 6px; font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.02em; }
@@ -269,7 +338,7 @@ tr.current td { font-weight: 600; }
 
 /* Narrow: icons only in the pose control */
 @media (max-width: 760px) {
-  .poses button span { display: none; }
+  .poses button span, .poses i span { display: none; }
   .poses button { padding: 0 9px; }
   #openSite span { display: none; }
   #openSite { width: 34px; padding: 0; }
@@ -280,7 +349,34 @@ tr.current td { font-weight: 600; }
   .toolbar { gap: 6px; }
 }
 
+/* First load: the device settles in, then the caption and the toolbar (DESIGN.md §Motion) */
+@keyframes enter { from { opacity: 0; transform: translateY(8px); } }
+body:not(.ready) .scaler, body:not(.ready) .dock > * { opacity: 0; }
+.ready .scaler, .ready .caption, .ready .toolbar { animation: enter 480ms var(--ease-out) backwards; }
+
+/* Light → dark is a full-screen brightness change: cross-fade it rather than cut (Apple, reduced motion guidance) */
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: 250ms; }
+
+/* Reduce Transparency: solid surfaces, no blur behind them. Increase Contrast: firmer lines and secondary text. */
+@media (prefers-reduced-transparency: reduce) {
+  :root { --surface: var(--surface-solid); }
+  .toolbar::before, .fold-hint button, .sheet-backdrop { -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .sheet-backdrop { background: rgba(0, 0, 0, 0.45); }
+}
+@media (prefers-contrast: more) {
+  :root {
+    --muted: light-dark(#3a3a3c, #d1d1d6);
+    --line: light-dark(rgba(60, 60, 67, 0.5), rgba(235, 235, 245, 0.45));
+    --fill: light-dark(rgba(120, 120, 128, 0.2), rgba(120, 120, 128, 0.38));
+  }
+}
+.ready .caption { animation-delay: 60ms; }
+.ready .toolbar { animation-delay: 120ms; }
+
+/* Reduce Motion: no movement, but fades stay (DESIGN.md §Motion) */
 @media (prefers-reduced-motion: reduce) {
-  .vp.glide, .crease::before, .crease::after, .fold-tip, .switch, .switch::after { transition: none; }
-  .chrome.fade .bar > *, .chrome.fade .home, .chrome.fade .other, .fold-hint:not([hidden]) { animation: none; }
+  .vp.glide, .switch::after, .seg .on > span { transition: none; }
+  .btn:active { transform: none; }
+  .fold-tip, .menu, .sheet, #theme svg { transform: var(--tx, none) !important; }
+  .ready .scaler, .ready .caption, .ready .toolbar { animation-name: soft-in; }
 }

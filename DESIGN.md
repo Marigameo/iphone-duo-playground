@@ -31,6 +31,7 @@ Sized from Apple's published dimensions, so the bezel and corners match the hard
 | Corner radius | 58pt outside; screen 58 − 3 − bezel ≈ 37–38pt | Concentric corners, as on every current iPhone. Apple has not published the Duo's; this is iPhone-like, not measured |
 | Hinge seam | 2pt notch in the rim at the hinge, inner display only | The one hardware cue that says "this folds" without decoration |
 | Scale | Fit the stage, never above 1.0 | 1.0 is true CSS size; upscaling would make text look sharper than on the device |
+| The page's layer | `.vp { will-change: transform }`, always | Round 13, a Chromium bug: after the device animated to a new size **and** the page moved (outer screen → Split View, by fold or morph), Chromium drew the page's `position: fixed` elements without their text until something repainted them. The sample's notice showed as an empty card. Either change alone was fine, and so was a direct render, and WebKit never did it. A 1px resize or an own layer cured it; the own layer also prevents it, on every path. Measured: text equally sharp after scale changes, fold frames unchanged (0 slow of 278). This is the one place `will-change` earns its keep; on the rig it made closing slower (round 12) |
 
 ## Safari's bars (round 02: "feel like trying a real browser")
 
@@ -44,6 +45,7 @@ Sizes are WebKit's. **Where** each bar sits and what is drawn in it is approxima
 | Address field | Tapping it opens a sheet to type a URL | The way Safari works; and a full-size field stays usable when the device is scaled to 35% on a phone |
 | Bar colour | The page's background, read from the page when same-origin; ink flips light or dark by its luminance | WebKit: Safari extends the page colour behind its bars |
 | Home indicator | 140 × 5pt, 8pt from the bottom (4pt above a toolbar) | Present on every pose of a current iPhone; moved down where a toolbar shares the strip |
+| Load progress (round 12) | A 2.5pt blue line along the bottom of the address field: creeps to 90% over 6 s while loading, completes and fades on load | Safari's own progress bar. The playground can't see another site's real progress, so the creep is not a measurement, only "still loading" |
 | Crease, folded | 28pt shaded band with a dashed centre at 70% opacity; no label on the screen | Round 04 (owner): the red chip on the screen "looks ugly". The explanation moved to the Fold marker outside the device |
 | Fold marker | A small "Fold" pill outside the device at the crease's end (above for a vertical crease, beside for a horizontal one), with a 6pt tick to the frame; its explanation opens on hover, focus or tap | Round 04 (owner: "make it like a info pointer & reveal on interaction"). It keeps Apple's rule one tap away without covering the page |
 
@@ -77,7 +79,9 @@ Inspired by [chuspeeism/iphone-duo](https://github.com/chuspeeism/iphone-duo) (M
 | Framing | The visible part stays centred; the scale moves between the closed and open fits | So the device doesn't jump sideways when the open width appears |
 | The page | Already at its new size under the glass, through the mid-fold size | The animation doesn't fake the resize; it hides nothing the device wouldn't |
 | Timing source | `performance.now()`, not the frame timestamp | Same base in browsers, and it lets the test drive a fake clock to check exact frames |
-| Reduced motion | No animation; the pose changes at once | |
+| Reversing | Choosing the pose the fold started from, while the cover moves, turns it round from its current angle over the remaining share of the duration. Round 12: it keeps the cover's speed, adding `v·dur·p(1 − p)³` to the landing curve, so the cover carries on a few degrees, slows and comes back | Round 11 (Emil's interruptibility rule); round 12 (Apple: no "brick wall" on reversal). The added term has no speed or acceleration left at the end, so the landing is unchanged. Other choices mid-fold still finish the fold first |
+| Main thread | Kept on `requestAnimationFrame` | Round 11, measured: no long tasks during the fold at 1×, 4× or 6× CPU throttling, and frame times didn't change with throttling, so the cost is paint, not script. The Web Animations API would not help, and would lose the fake-clock frame tests. Round 12: those runs used Chromium's software renderer. On the GPU (Metal, M3 Pro) the fold, turn and morph hold 60 fps (p95 ≈ 17.5 ms, 1–2% slow frames). `will-change: transform` on the rig was tried and made closing worse, so it isn't used. A mid-range iPhone is still unmeasured |
+| Reduced motion | No fold; the pose cross-fades | Round 11: Apple and Emil both say to replace motion with a dissolve, not remove it |
 
 ## Sample page (round 04: "a good looking purposeful page… I just don't want it be fake")
 
@@ -107,6 +111,8 @@ Inspired by [chuspeeism/iphone-duo](https://github.com/chuspeeism/iphone-duo) (M
 | `--line` | `rgba(60,60,67,.18)` | `rgba(84,84,88,.5)` | iOS separator |
 | `--accent` | `#007aff` | `#0a84ff` | iOS blue, for the one primary action and the selected segment |
 | `--crease` | `#ff3b30` | `#ff453a` | iOS red, used only for the crease centre line and "estimated" marks |
+| `--thumb` | `#ffffff` | `#636366` | The selected segment, as iOS draws it. Round 11: the dark one was `#2c2c2e` and nearly vanished into the toolbar |
+| `--ease-out` | `cubic-bezier(0.23, 1, 0.32, 1)` | same | Emil Kowalski's strong ease-out, for the playground's own controls (not the device) |
 | Bezel | `#2b2b2e` with a 1px `#48484a` edge | same | Titanium-ish without a texture image |
 
 ## Type
@@ -129,11 +135,41 @@ One easing for the hand-driven motions: **smootherstep**; the fold uses it on a 
 | Flat ↔ Folded | The fold band and its centre line fade | 460 ms | Was instant |
 | Fold marker | Fades in 120 ms after the device settles; its tip fades and drops 3 px | 420 ms / 220 ms | Appears after the motion, not during it |
 | What fades | The page, Safari's bars and the crease, never the screen itself and never the Dynamic Island | | The screen holds the page colour, so a change fades through cream (or the page's own colour). Fading the whole screen showed the black glass behind it for a moment |
-| Reduced motion | No turn, fold, glide or fades; every change is immediate | | |
+| Blur on fades | Up to 2 px as the screen content fades out, back to none as it fades in | Same as the fade | Round 11 (Emil: blur masks a cross-fade, so old and new read as one change). Small enough not to read as an effect |
+| Reduced motion | No turn, fold, glide, thumb slide, scale or entrance movement. Fades stay, and a pose change cross-fades (200 + 420 ms) | | Round 11. Was: every change immediate, including fades. Apple's HIG and Emil both keep dissolves under Reduce Motion |
+
+### The playground's own controls (round 11, Emil Kowalski's design-engineering skill)
+
+The device motions above are explanatory and were slowed at the owner's request, so his 300 ms ceiling doesn't apply to them. It applies to everything around the device.
+
+| Control | Motion | Why |
+| --- | --- | --- |
+| Segmented controls | The selected look is a copy of the row in the selected style, clipped to the chosen segment; the clip moves, 260 ms `--ease-out` | His clip-path tabs: thumb, colour and label weight move as one. The labels no longer change weight in place, so nothing shifts. iOS slides its thumb too |
+| Buttons (header, sheet, menu) | `scale(0.97)` on press, 160 ms | Press feedback. Safari's buttons inside the device keep iOS's highlight instead |
+| Hover | Background over 150 ms `ease`, only under `(hover: hover) and (pointer: fine)` | On touch, hover sticks after a tap |
+| Menu | Grows from the ⋯ button: scale 0.96 and fade in 220 ms, out 140 ms | Popovers grow from their trigger, and leave faster than they arrive |
+| Address sheet | Backdrop fades, sheet from scale 0.97, 220 ms in, 140 ms out | A modal, so it stays centred |
+| Fold tip | Opens on a press, or after 250 ms of hover; 150 ms in from scale 0.97, 100 ms out. A second press closes it even under the pointer | The old version stayed open under hover and focus while it said closed |
+| Copy buttons | Keep their width; the label blurs out and in over 120 ms | The row reflowed under the pointer when "Copied" was shorter |
+| Theme button | Moon in light, sun in dark; rotate, scale and fade, 200 ms | It showed the moon in both |
+| First load | Device, caption, toolbar rise 8 px and fade, 480 ms, 60 ms apart | A first visit can take a little delight; it also hides the moment before `poses.json` arrives |
+| Touch targets | 44 pt tall on touch screens through an invisible extension; the controls keep their size | Apple's minimum |
+
+### Round 12 (Emil Kowalski's apple-design, animation and performance skills)
+
+| Control | Motion | Why |
+| --- | --- | --- |
+| Toolbar, when the Fold control comes or goes | The groups slide from where they were (measure, change, animate the difference, 260 ms `--ease-out`); the material is its own layer (`.toolbar::before`) and stretches to the new size; Fold fades in | It jumped 66 px at once, moving "Open" from under the pointer. Keeping Fold always visible was the alternative, but would wrap the toolbar at phone width |
+| Segments | Dim to 0.5 the moment they're pressed, back over 200 ms on release; the choice still commits on release | Apple: feedback on press. iOS needs a touch listener for `:active`, now on the document |
+| Turn, morph, Open ↔ Split View | Choosing the starting pose mid-way runs it back from where it is. A morph still fading out fades straight back | Apple: never make people wait for a motion to finish before reversing it |
+| Theme | Cross-fades over 250 ms (View Transitions), where supported | Apple: avoid a full-screen brightness jump. The sample page follows the system setting, not this button, as a real site would |
+| Reduce Transparency | Toolbar, Fold pill and sheet backdrop go solid, with no blur | Apple's setting. The fold's glass is the demonstration, so it stays |
+| Increase Contrast | Secondary text `#3a3a3c` / `#d1d1d6`, firmer separators and fills | Apple's setting |
+| Easing tokens | `--ease-drawer: cubic-bezier(0.32, 0.72, 0, 1)`, Emil's name for the curve the bar glide and crease fade already used | One name instead of three copies. No visual change | |
 
 ## Size
 
-One HTML, one CSS, two JS files, no dependencies. Guard: **76,000 bytes** before gzip for `index.html`, `playground.css`, `playground.js` and `duo-flags.js`, checked by `scripts/size.sh`. Measured 51,791 at M2 and 63,281 after round 04 (the fold animation and marker). The guard held, with under 1 KB to spare. Round 05 (the owner: "It's too fast, can we make it even more smooth on transitions overall") added the quarter-turn, the cross-fade, the bar glide and the fold-band fade, reaching 67,162. Raised to 72,000: those transitions are what was asked for, and minifying would break the rule that the source is readable as served. Round 07 (the glass cover) went 426 bytes over. Instead of raising the guard again, dead code went: a cover background both faces override, a no-op perspective-origin line, an unused variable, and an unused `.other-label` rule. Now 71,991. Round 08 (a gentler close, the closed-phone cover and its hand-off) took it to 73,795; raised to **76,000**, since the owner's request was about the one thing this page exists to show well, and the hand-off needs the code. Round 09 (the morph and the settled reveal) went 210 over; comments that repeated this file were cut to one-line pointers. Now 75,739. The 40 KB planned in M1 did not survive two real additions, the Safari bars drawn in every pose and the flags shim, and both earn their bytes. The guard leaves about 12 KB of headroom.
+One HTML, one CSS, two JS files, no dependencies. Guard: **100,000 bytes** before gzip for `index.html`, `playground.css`, `playground.js` and `duo-flags.js`, checked by `scripts/size.sh`. Measured 51,791 at M2 and 63,281 after round 04 (the fold animation and marker). The guard held, with under 1 KB to spare. Round 05 (the owner: "It's too fast, can we make it even more smooth on transitions overall") added the quarter-turn, the cross-fade, the bar glide and the fold-band fade, reaching 67,162. Raised to 72,000: those transitions are what was asked for, and minifying would break the rule that the source is readable as served. Round 07 (the glass cover) went 426 bytes over. Instead of raising the guard again, dead code went: a cover background both faces override, a no-op perspective-origin line, an unused variable, and an unused `.other-label` rule. Now 71,991. Round 08 (a gentler close, the closed-phone cover and its hand-off) took it to 73,795; raised to **76,000**, since the owner's request was about the one thing this page exists to show well, and the hand-off needs the code. Round 09 (the morph and the settled reveal) went 210 over; comments that repeated this file were cut to one-line pointers. Now 75,739. Round 11 (the design-engineering pass the owner asked for, and the size raise they approved: "size is fine, we can raise for now") reached 82,700; the guard is now **86,000**. Round 12 reached 89,957; the guard is now **100,000**. The owner: "It's an application & not a component so I'm fine if size exceeds. Will do a size audit at last & optimise if required." The 40 KB planned in M1 did not survive two real additions, the Safari bars drawn in every pose and the flags shim, and both earn their bytes. The guard leaves about 12 KB of headroom.
 
 ## Milestone 2 behaviours
 

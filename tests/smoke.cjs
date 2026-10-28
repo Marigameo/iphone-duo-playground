@@ -65,6 +65,15 @@ const check = (name, ok, detail = '') => { console.log(`${ok ? '✓' : '✗'} ${
   r = await probe();
   check('flags on, closed: continuous, 1 segment', r.posture === 'continuous' && r.seg === '1', JSON.stringify(r));
 
+  // 4b. Chromium once drew the page's fixed notice without its text after folding into Split View
+  //     (playground.css, .vp will-change). A blank card compresses to ~1–2 KB as a PNG; with text it's ~7 KB+.
+  await page.click('#poses [data-v="closed-portrait"]'); await page.waitForTimeout(2600);
+  await page.click('#poses [data-v="split-view"]'); await page.waitForTimeout(3200);
+  const nbox = await page.evaluate(() => { const f = document.getElementById('frame'), r = f.getBoundingClientRect(), n = f.contentDocument.getElementById('notice').getBoundingClientRect(); return { x: r.left + n.left, y: r.top + n.top, width: n.width, height: n.height }; });
+  const nbytes = (await page.screenshot({ clip: nbox })).length;
+  check('after folding into Split View, the page\'s notice is drawn with its text', nbytes > 4000, `${nbytes} bytes`);
+  await page.click('#poses [data-v="closed-portrait"]'); await page.waitForTimeout(2600);
+
   // 5. The sample is real: its readout matches what the page gets, and its notice goes when told.
   const sf = await sample();
   const live = await sf.evaluate(() => ({ vp: document.getElementById('vp').textContent, w: innerWidth, h: innerHeight }));
@@ -90,6 +99,39 @@ const check = (name, ok, detail = '') => { console.log(`${ok ? '✓' : '✗'} ${
   const shown = await page.evaluate(() => getComputedStyle(document.getElementById('vp')).opacity);
   check('after the morph, the page is fully revealed', shown === '1', shown);
 
+  // 6c. Choosing the starting pose mid-fold turns the cover round from where it is, and it still lands clean.
+  await page.click('#poses [data-v="closed-portrait"]'); await page.waitForTimeout(2600);
+  await page.click('#poses [data-v="open-landscape"]'); await page.waitForTimeout(940);
+  const turn = await page.evaluate(() => { // read, reverse and read again in one go, so the swing can't move in between
+    const deg = () => +/(-?[\d.]+)deg/.exec(document.getElementById('flap').style.transform)[1];
+    const a = deg(); document.querySelector('#poses [data-v="closed-portrait"]').click(); return [a, deg()];
+  });
+  check('reversing mid-fold continues from the same angle', turn[0] > 5 && turn[0] < 175 && Math.abs(turn[0] - turn[1]) < 0.5, JSON.stringify(turn));
+  await page.waitForTimeout(2200);
+  const rev = await page.evaluate(() => ({ fx: document.getElementById('foldfx').hidden, clip: document.getElementById('device').style.clipPath }));
+  const [rw] = await size();
+  check('the reversed fold lands closed, with nothing left behind', rev.fx && !rev.clip && rw === 382, JSON.stringify({ ...rev, rw }));
+
+  // 6d. When the Fold control appears, the toolbar's groups slide over rather than jump.
+  const leftOf = () => page.evaluate(() => Math.round(document.getElementById('poses').getBoundingClientRect().left));
+  const l0 = await leftOf();
+  await page.click('#poses [data-v="open-landscape"]');
+  const path = [];
+  for (let i = 0; i < 12; i++) { await page.waitForTimeout(40); path.push(await leftOf()); }
+  await page.waitForTimeout(2200);
+  const l1 = await leftOf();
+  check('the toolbar slides to make room for the Fold control', path.filter((x) => x < l0 - 2 && x > l1 + 2).length >= 2, JSON.stringify({ l0, path, l1 }));
+
+  // 6e. A turn chosen back mid-way turns back from where it is.
+  await page.click('#poses [data-v="open-portrait"]'); await page.waitForTimeout(350);
+  const tb = await page.evaluate(() => {
+    const rot = () => +((/rotate\((-?[\d.]+)deg\)/.exec(document.getElementById('rig').style.transform) || [0, 0])[1]);
+    const a = rot(); document.querySelector('#poses [data-v="open-landscape"]').click(); return [a, rot()];
+  });
+  await page.waitForTimeout(900);
+  const [tw] = await size();
+  check('a turn chosen back mid-way returns without finishing first', Math.abs(tb[0]) > 10 && Math.abs(tb[0] - tb[1]) < 1 && tw === 951, JSON.stringify({ tb, tw }));
+
   // 7. Back, Forward and Reload: in-page links stay in the page and can be walked back; nothing escapes.
   const before = page.url();
   let nf = await sample();
@@ -106,7 +148,10 @@ const check = (name, ok, detail = '') => { console.log(`${ok ? '✓' : '✗'} ${
   check('Back returns to the top', (await nf.evaluate(() => Math.round(scrollY))) < 5);
   await page.click('#chrome [data-act="fwd"]'); await page.waitForTimeout(1200);
   check('Forward returns to the checklist', Math.abs((await nf.evaluate(() => Math.round(scrollY))) - at.y) < 5);
-  await page.click('#chrome [data-act="reload"]'); await page.waitForTimeout(1500);
+  await page.click('#chrome [data-act="reload"]');
+  check('Reload shows Safari\'s progress line', await page.evaluate(() => document.getElementById('chrome').classList.contains('loading')));
+  await page.waitForTimeout(1500);
+  check('the progress line clears once loaded', await page.evaluate(() => !/loading|loaded/.test(document.getElementById('chrome').className)));
   nf = await sample();
   check('Reload resets to the top with an empty history', (await nf.evaluate(() => Math.round(scrollY))) === 0 && await backDim());
   check('the playground URL never changed', page.url() === before, page.url());
@@ -115,6 +160,29 @@ const check = (name, ok, detail = '') => { console.log(`${ok ? '✓' : '✗'} ${
   await page.click('#menuBtn'); await page.click('#copyPresets'); await page.waitForTimeout(200);
   const clip = await page.evaluate(() => navigator.clipboard.readText());
   check('presets list every pose', poses.every((p) => clip.includes(`width: ${p.viewport.width}, height: ${p.viewport.svh}`)), clip.slice(0, 120));
+  await page.keyboard.press('Escape');
+
+  // 9. Controls: the fold tip closes on a second press even under the pointer; the thumb sits on the chosen segment.
+  const tip = () => page.evaluate(() => getComputedStyle(document.getElementById('foldTip')).opacity);
+  await page.click('#foldHintBtn'); await page.waitForTimeout(300); const tipA = await tip();
+  await page.click('#foldHintBtn'); await page.waitForTimeout(300); const tipB = await tip();
+  check('the fold tip opens on a press and closes on the next', tipA === '1' && tipB === '0', `${tipA} ${tipB}`);
+  const thumb = await page.evaluate(() => {
+    const b = document.querySelector('#poses [aria-checked=true]').getBoundingClientRect(), t = document.querySelector('#poses .on > span');
+    const r = t.getBoundingClientRect(), m = /inset\(0px ([\d.]+)px 0px ([\d.]+)px/.exec(getComputedStyle(t).clipPath);
+    return Math.abs(b.left - (r.left + +m[2])) < 1 && Math.abs(b.right - (r.right - +m[1])) < 1;
+  });
+  check('the selected thumb lines up with the chosen pose', thumb);
+
+  // 10. Reduce Motion: no fold, but the change still cross-fades.
+  const rctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+  const rp = await rctx.newPage();
+  rp.on('pageerror', (e) => errors.push(e.message));
+  await rp.goto(BASE, { waitUntil: 'networkidle' }); await rp.waitForTimeout(800);
+  await rp.click('#poses [data-v="open-landscape"]'); await rp.waitForTimeout(100);
+  const rm = await rp.evaluate(() => ({ cover: !document.getElementById('foldfx').hidden, op: +getComputedStyle(document.getElementById('vp')).opacity }));
+  check('reduce motion: no fold cover, a cross-fade instead', !rm.cover && rm.op < 1, JSON.stringify(rm));
+  await rctx.close();
 
   check('no console errors', errors.length === 0, errors.join(' | '));
   await browser.close();

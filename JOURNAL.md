@@ -90,3 +90,45 @@ Mari: "Yeah let's create the public repo, push & turn on github pages"
 Created public `Marigameo/iphone-duo-playground`, switched Pages to GitHub Actions before the first push so the first deploy would succeed, pushed `main`. The deploy succeeded. Live: https://marigameo.github.io/iphone-duo-playground/. The smoke test ran against the live site: 38/38. Loaded live in Chromium and WebKit with no page errors; both report 951 × 585 at Open.
 
 Still to do, in the skills repo: link the playground from the skills README when `fit-iphone-duo` ships. The playground's "Fix it with the skill" link points at the skills repo until then.
+
+## 11 · 2026-10-28 · Design-engineering pass
+
+Mari: "let's start with audits with design skills to make this better. But make sure whatever purposely done to align to apple guidelines shouldn't change", using Emil Kowalski's `emil-design-eng` skill. On the findings: "Yeah 1-11, 13 if found valid after measuring", "size is fine, we can raise for now", and the optional ones "if [they don't] change anything visually (drastic) & adds value".
+
+Kept on purpose, though the skill's rules say otherwise: the long device motions (explanatory, and slowed at Mari's request in rounds 05 and 08), smootherstep for them, the bar glide animating `top`/`height` (the page must get real sizes), the 10 px glass blur (under his 20 px cap), Safari's own buttons, iOS colours and geometry.
+
+Done: a found bug, the fold tip stayed open after a second press (hover and focus held it) while telling screen readers it was closed. Hover now only on real pointers. The segmented controls slide their thumb with his clip-path technique, so label weight no longer shifts the text. The menu grows from ⋯, the sheet eases in, both leave faster. Buttons press to 0.97. The copy buttons keep their width. The theme button shows a sun in dark mode. The morph sets the screen radius on the element instead of a variable on `.rig`. Reduce Motion keeps fades, and pose changes cross-fade instead of cutting.
+
+Measured before deciding #13 (the Web Animations API): no long tasks during the fold at 1×, 4× or 6× CPU throttling, and frame times didn't change with throttling. The cost is paint, not script, so it was dropped.
+
+Optional ones taken: reversing a fold mid-swing turns the cover round from where it is; a 2 px blur rides the screen fades; first load settles in (device, caption, toolbar, 60 ms apart); the dark selected segment is `#636366` as on iOS (it was nearly invisible); touch targets reach 44 pt without changing what's drawn.
+
+Seen, not fixed (it predates this round): after folding to Split View in dark mode, the sample's notice text sometimes doesn't paint in headless Chromium, though its colours are right in the DOM. Needs a look in real Safari.
+
+Size: 82,700 bytes; guard 76,000 → 86,000. Smoke test 38 → 43 checks, plus a one-off 30-check pass on the new behaviour. Snapshot: `process/08-polish/`.
+
+## 12 · 2026-10-28 · Apple-style motion pass
+
+Mari shared five more of Emil Kowalski's skills (apple-design, find-animation-opportunities, improve-animations, animate, animation-performance): "don't blindly apply any. Just check if anything useful out of those." Then, on the findings: "We can accommodate whatever adds value & doesn't break", and on size: "It's an application & not a component so I'm fine if size exceeds. Will do a size audit at last & optimise if required."
+
+Measured before proposing. Frame numbers so far (round 11 included) came from Chromium's software renderer; on the GPU (Metal, M3 Pro) the fold, turn and morph hold 60 fps. A turn "jank" found in software rendering was not real. `will-change: transform` on the device was tried as a fix and made closing worse, so it was dropped.
+
+Done: the toolbar slides to make room for the Fold control instead of jumping 66 px; Safari's progress line in the address field while a page loads; the theme cross-fades instead of flashing; segments dim on press; turn, morph and Open ↔ Split View reverse from where they are, and a fold reversal keeps the cover's speed; Reduce Transparency and Increase Contrast are honoured; one `--ease-drawer` token for a curve typed three times.
+
+Rejected, with reasons in the findings: animated caption numbers (data being read), press-scale on Safari's own buttons, springs for the fold (button-driven, timing tuned by Mari), drag-to-fold (a new feature, not polish), ease-in exits, animating the backdrop blur, per-size letter spacing, a `plans/` folder.
+
+Caught in testing: the Fold control didn't fade in, because the toolbar's measure-and-animate step switches transitions off at the moment it appears; fixed. The check that the framed page follows the theme button was wrong: the sample follows the system setting, unchanged since round 01.
+
+Size: 89,957 bytes; guard 86,000 → 100,000. Smoke test 43 → 47 checks, three planted bugs each caught by their own check, plus a one-off 18-check pass with the GPU and a WebKit sanity run. Snapshot: `process/09-motion/`.
+
+## 13 · 2026-10-28 · A blank card in Chrome
+
+Mari: "Fix if anything is pending. Install xcode as well if required for some verification & finally we can push everything together"
+
+The pending item was the sample's notice drawing as an empty card in Chromium (GPU and software alike), only after reaching Split View from the outer screen, by fold or by morph. WebKit was always fine. Bisected: the text was in the DOM and clickable, so this was a paint bug, not CSS. Neither the mid-fold resize nor the dimming caused it, nor did a plain resize-and-move or a direct render. It took the device's size animation together with the page's new position. A 1px resize, or giving the page its own layer, cured it. The own layer, `.vp { will-change: transform }`, also prevents it on every path, with sharpness and frame rate measured unchanged. The fix is in the playground rather than the sample, because any site with a fixed element would have hit it. New smoke check, proven to fail without the fix (1,601-byte blank card vs ~8 KB with text). Snapshot: `process/10-repaint/`.
+
+Checked, nothing pending: `poses.json` matches the skill's copy; the skills README already links the playground (the to-do from round 10 is done). The skill's self-test passes (13 planted problems caught, the fixed page clean).
+
+Xcode: only the Command Line Tools are on this Mac, so the skill's simulator script skips ("only the Command Line Tools are installed"). Installing Xcode 27.1 needs Mari's Apple ID, so it can't be done from here. It would let the skill's Safari pass run for the first time, and measure the numbers still marked estimated (the crease in Open tall, where Safari draws its bars).
+
+Size: 90,321 bytes. Smoke test 48 checks.
