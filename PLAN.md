@@ -1,6 +1,6 @@
 # iphone-duo-playground: plan
 
-> Current step: **Round 04 done (fold animation, marker, sample); waiting for the owner to look, then the go to publish (M3).** The owner approved round 02 ("This looks great, let's move to the next steps", 28 Oct 2026). The brief (§0) and the What (§1) are agreed (Mari, 27 Oct 2026: "playground 1st", "host the playground in github pages itself", "static html page but make it look more like iphone/apple world", "separate repo like co-presence", "yes we can export & ship it first as planned").
+> Current step: **M3 shipped (28 Oct 2026). Live at https://marigameo.github.io/iphone-duo-playground/.** Next: the fit-iphone-duo skill, which links here and vendors `poses.json`. The owner approved round 02 ("This looks great, let's move to the next steps", 28 Oct 2026). The brief (§0) and the What (§1) are agreed (Mari, 27 Oct 2026: "playground 1st", "host the playground in github pages itself", "static html page but make it look more like iphone/apple world", "separate repo like co-presence", "yes we can export & ship it first as planned").
 
 ## 0. Brief
 

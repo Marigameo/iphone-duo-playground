@@ -82,3 +82,11 @@ Done: slower (open 240 + 1400 ms, close 1500 + 420 ms), with a landing curve tha
 Mari: "when I come back to close from somewhere. the revealing of page content is not smooth. It appears sudden in white screen, make it smooth" and "when I move from closed, wide to open - it's wierd changing from as both are different orientations, ideally we should fade smooth & make the transition smooth. Same in few other combinations as well"
 
 Done: the new page now waits until it has settled at its size (after the mid-fold step and a reflow), then fades in over 420 ms. Pairs that don't fold into each other on the device (Closed ↔ Open tall, Closed wide ↔ Open or Split View) now morph. Content and Safari's chrome fade out, the frame flows to the new shape, and the new page fades in. The natural pairs keep the fold. Caught in frames: mid-morph, the outer screen's column drifted into the middle of the growing frame, so the chrome now fades out with the page. Three new checks (38 in all). Comments repeating DESIGN.md were cut to stay under the size guard (75,739 / 76,000). Frames: `process/07-morph/sheet.png`.
+
+## 10 · 2026-10-28 · Shipped
+
+Mari: "Yeah let's create the public repo, push & turn on github pages"
+
+Created public `Marigameo/iphone-duo-playground`, switched Pages to GitHub Actions before the first push so the first deploy would succeed, pushed `main`. The deploy succeeded. Live: https://marigameo.github.io/iphone-duo-playground/. The smoke test ran against the live site: 38/38. Loaded live in Chromium and WebKit with no page errors; both report 951 × 585 at Open.
+
+Still to do, in the skills repo: link the playground from the skills README when `fit-iphone-duo` ships. The playground's "Fix it with the skill" link points at the skills repo until then.
