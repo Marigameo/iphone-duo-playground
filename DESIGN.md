@@ -63,6 +63,8 @@ Sizes are WebKit's. **Where** each bar sits and what is drawn in it is approxima
 
 The device takes the whole stage. A one-line header, one caption line (viewport size and crease state only), one floating toolbar. Everything else (page colour, the five-pose table, sources, credits) sits behind the ⋯ menu.
 
+The page's grid column is `minmax(0, 1fr)`, so it can never grow wider than the window, even mid-resize while the device is still at its old scale. With the default `auto` column it could, which made WebKit report a ResizeObserver loop (round 14).
+
 ## Fold animation (round 04: "like how real iphone duo would fold & open in a nice glassomorphic effect")
 
 Inspired by [chuspeeism/iphone-duo](https://github.com/chuspeeism/iphone-duo) (MIT, Three.js): only the cover half moves, blur and darkening follow the fold, smoothstep easing. Rebuilt in CSS 3D so the playground keeps no dependencies.
@@ -133,7 +135,7 @@ One easing for the hand-driven motions: **smootherstep**; the fold uses it on a 
 | Revealing the new page | Held hidden until the page has settled (after the mid-fold step, plus 90 ms to reflow), then a 420 ms fade | | Owner, round 09: arriving on Closed, the page "appears sudden in white screen". It was fading in while still at the mid-fold size, then jumping |
 | Bars ↔ Scrolled | The page's height glides; Safari's bars fade to their new state | 420 ms | Safari animates its bars collapsing; the page gets the intermediate sizes too, as on the device |
 | Flat ↔ Folded | The fold band and its centre line fade | 460 ms | Was instant |
-| Fold marker | Fades in 120 ms after the device settles; its tip fades and drops 3 px | 420 ms / 220 ms | Appears after the motion, not during it |
+| Fold marker | Fades in 120 ms after the device settles. Its tip: see §The playground's own controls (round 11) | 420 ms | Appears after the motion, not during it |
 | What fades | The page, Safari's bars and the crease, never the screen itself and never the Dynamic Island | | The screen holds the page colour, so a change fades through cream (or the page's own colour). Fading the whole screen showed the black glass behind it for a moment |
 | Blur on fades | Up to 2 px as the screen content fades out, back to none as it fades in | Same as the fade | Round 11 (Emil: blur masks a cross-fade, so old and new read as one change). Small enough not to read as an effect |
 | Reduced motion | No turn, fold, glide, thumb slide, scale or entrance movement. Fades stay, and a pose change cross-fades (200 + 420 ms) | | Round 11. Was: every change immediate, including fades. Apple's HIG and Emil both keep dissolves under Reduce Motion |

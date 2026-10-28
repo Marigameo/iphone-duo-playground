@@ -77,6 +77,9 @@
   if (params.get('flags') === '1') state.flags = true;
 
   const px = (n) => `${n}px`;
+  const L = (a, b, e) => a + (b - a) * e; // from a to b as e goes 0 → 1
+  // The animations drive the device's size themselves; its CSS transition comes back the frame after they end.
+  const releaseDevice = () => requestAnimationFrame(() => { els.device.style.transition = ''; });
   const poseById = (id) => state.data.poses.find((p) => p.id === id) || state.data.poses[0];
   const pose = () => poseById(state.pose);
   const hostLabel = () => {
@@ -196,6 +199,7 @@
 
     applyColours();
     els.chrome.innerHTML = chromeHTML(p);
+    if (els.chrome.classList.contains('loading')) progress(true); // a new address field: let its line creep again
 
     // The crease: on the open poses only. In Split View it runs under the divider.
     const showCrease = !!p.crease && p.id !== 'split-view';
@@ -226,21 +230,20 @@
     if (reduceMotion.matches || !document.body.classList.contains('ready')) { change(); return; }
     const kids = [...tb.children], r0 = tb.getBoundingClientRect(), k0 = kids.map((k) => k.getBoundingClientRect());
     change();
-    const r1 = tb.getBoundingClientRect();
+    const r1 = tb.getBoundingClientRect(), k1 = kids.map((k) => k.getBoundingClientRect());
     tb.classList.add('flip');
     const s = tb.style;
     s.setProperty('--tx', px(r0.left + r0.width / 2 - (r1.left + r1.width / 2)));
     s.setProperty('--ty', px(r0.top + r0.height / 2 - (r1.top + r1.height / 2)));
     s.setProperty('--sx', r0.width / r1.width); s.setProperty('--sy', r0.height / r1.height);
     kids.forEach((k, i) => {
-      const a = k0[i], b = k.getBoundingClientRect();
-      if (a.width && b.width) k.style.transform = `translate(${a.left - b.left}px, ${a.top - b.top}px)`;
-      else if (b.width) k.style.opacity = '0'; // newly shown: fades in
+      const a = k0[i], b = k1[i];
+      if (a.width && b.width) k.style.transform = `translate(${a.left - b.left}px, ${a.top - b.top}px)`; // newly shown ones fade in (CSS)
     });
     void tb.offsetWidth;
     tb.classList.remove('flip');
     for (const v of ['--tx', '--ty', '--sx', '--sy']) s.removeProperty(v);
-    kids.forEach((k) => { k.style.transform = k.style.opacity = ''; });
+    kids.forEach((k) => { k.style.transform = ''; });
   }
 
   // Scale the rig to the stage, and keep the fold marker at the crease's end, outside the screen.
@@ -261,14 +264,15 @@
     if (!show) return;
     const v = p.crease.axis === 'vertical';
     els.hint.className = `fold-hint ${v ? 'v' : 'h'}`;
-    els.hintBtn.setAttribute('aria-expanded', 'false');
+    hintOpen(false, false);
     if (v) { els.hint.style.left = px((RIM + g.bx + p.crease.screenPos) * s); els.hint.style.top = '0px'; }
     else { els.hint.style.left = '0px'; els.hint.style.top = px((RIM + g.by + p.crease.screenPos) * s); }
   }
-  // A press toggles the tip. Closing it marks it "shut", so hover and focus can't hold it open until they leave.
-  function hintOpen(open) {
+  // A press toggles the tip. Closing it by a press or Escape marks it "shut", so the hover or focus still on it
+  // can't hold it open; "shut" clears when they leave. A click elsewhere closes it without that.
+  function hintOpen(open, shut = !open) {
     els.hint.classList.toggle('open', open);
-    els.hint.classList.toggle('shut', !open);
+    els.hint.classList.toggle('shut', shut);
     els.hintBtn.setAttribute('aria-expanded', String(open));
   }
   els.hintBtn.addEventListener('click', () => hintOpen(!els.hint.classList.contains('open')));
@@ -277,7 +281,7 @@
   els.hint.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') hoverT = setTimeout(() => els.hint.classList.add('hover'), 250); });
   els.hint.addEventListener('pointerleave', () => { clearTimeout(hoverT); els.hint.classList.remove('hover', 'shut'); });
   els.hint.addEventListener('focusout', () => els.hint.classList.remove('shut'));
-  document.addEventListener('click', (e) => { if (!els.hint.contains(e.target)) { els.hint.classList.remove('open'); els.hintBtn.setAttribute('aria-expanded', 'false'); } });
+  document.addEventListener('click', (e) => { if (!els.hint.contains(e.target)) hintOpen(false, false); });
 
   // ——— The fold (DESIGN.md §Fold animation): the cover swings 180° (shut) to 0° (flat) over the real page ———
   // e0 > 0 resumes from a fold that was reversed part-way (see changePose); outerId is then the closed pose, and
@@ -298,7 +302,7 @@
       els.device.style.transition = 'none'; // the fold drives the size; no CSS tween on top of it
       els.fx.style.transition = 'none'; els.fx.style.opacity = '1'; els.fx.style.transform = '';
       els.fx.hidden = false;
-      const dur = Math.max(1, MS[dir] * (1 - e0)), t0 = performance.now();
+      const dur = Math.max(1, MS[dir] * (1 - e0));
       // A reversal keeps the cover's speed: it carries on a little, slows, turns and comes back, rather than
       // stopping dead. p(1 − p)³ starts at that speed and fades out with no speed or acceleration left at the end,
       // so the landing is the same as ever.
@@ -308,16 +312,16 @@
         if (anim.e != null && now > anim.t) anim.v = (e - anim.e) / (now - anim.t);
         anim.e = e; anim.t = now;
         const theta = dir === 'open' ? 180 * (1 - e) : 180 * e;
-        frame(g, axis, theta, dir === 'open' ? sClosed + (sOpen - sClosed) * e : sOpen + (sClosed - sOpen) * e);
-      };
-      const step = () => {
-        const p = Math.min(1, (performance.now() - t0) / dur);
-        at(Math.min(1, Math.max(0, e0 + (1 - e0) * LAND(p) + m0 * p * (1 - p) ** 3)));
-        if (p < 1) anim.raf = requestAnimationFrame(step);
-        else finishFold(anim, { g, gc, axis });
+        frame(g, axis, theta, dir === 'open' ? L(sClosed, sOpen, e) : L(sOpen, sClosed, e));
       };
       at(e0);
-      anim.raf = requestAnimationFrame(step);
+      // Chosen back while the cover moves: a new fold the other way, from this angle and at this speed.
+      anim.reverse = () => {
+        anim.done = true; cancelAnimationFrame(anim.raf); state.anim = null;
+        foldTo(anim.from, dir === 'open' ? 'close' : 'open', 1 - anim.e, dir === 'close' ? next : null, -anim.v);
+      };
+      tween(anim, dur, (p) => at(Math.min(1, Math.max(0, e0 + (1 - e0) * LAND(p) + m0 * p * (1 - p) ** 3))), 0, 1,
+        () => finishFold(anim, { g, gc, axis }));
     };
     // Opening starts as the outer screen does: it dims, then the cover lifts.
     if (dir === 'open' && !e0) { screenFade(0, MS.pre); anim.timer = setTimeout(run, MS.pre); } else run();
@@ -386,12 +390,36 @@
       els.fx.style.opacity = '0';
       setTimeout(() => { if (!state.anim) els.fx.hidden = true; }, MS.settle);
     } else els.fx.hidden = true;
-    requestAnimationFrame(() => { els.device.style.transition = ''; });
+    releaseDevice();
   }
   function cancelFold() {
     const a = state.anim;
     if (!a) return;
     if (a.kind === 'turn') finishTurn(a); else if (a.kind === 'swap') finishSwap(a); else if (a.kind === 'morph') finishMorph(a); else finishFold(a);
+  }
+
+  // Turn and morph run on progress p from 0 (where they started) to 1 (where they're going), through show(p).
+  // tween() moves p from p0 to p1 over the matching share of ms. Reversing swaps the two ends and tweens on from
+  // where p is, so it can turn round any number of times.
+  function tween(anim, ms, show, p0, p1, done) {
+    cancelAnimationFrame(anim.raf);
+    const t0 = performance.now(), dur = Math.max(1, ms * Math.abs(p1 - p0));
+    const step = () => {
+      const k = Math.min(1, (performance.now() - t0) / dur);
+      show(p0 + (p1 - p0) * k);
+      if (k < 1) anim.raf = requestAnimationFrame(step); else done(anim);
+    };
+    anim.raf = requestAnimationFrame(step);
+  }
+  function turnRound(anim, ms, show, done) {
+    [anim.from, anim.next] = [anim.next, anim.from]; anim.back = !anim.back;
+    tween(anim, ms, show, anim.p, anim.back ? 0 : 1, done);
+  }
+  // Chosen back before anything but a fade has happened: fade the same screen back in.
+  function fadeBack(anim) {
+    anim.done = true; clearTimeout(anim.timer);
+    state.anim = state.target = null;
+    screenFade(1, MS.out);
   }
 
   // Turning (Closed ↔ Closed wide, Open ↔ Open tall): a quarter turn, then the new layout fades in.
@@ -400,29 +428,19 @@
     const g1 = state.dims, g2 = geometry(to);
     const s1 = state.scale, s2 = fitScale(g2);
     const deg = to.screen.width > to.screen.height ? -90 : 90;
-    const anim = { raf: 0, kind: 'turn', next, from: state.pose, done: false, p: 0 };
+    const anim = { raf: 0, kind: 'turn', next, from: state.pose, done: false, back: false, p: 0 };
     state.anim = anim; els.hint.hidden = true;
     els.device.style.transition = 'none';
     const show = (p) => {
       anim.p = p;
-      const e = EASE(p), sc = s1 + (s2 - s1) * e;
-      const bw = g1.w * s1 + (g2.w * s2 - g1.w * s1) * e, bh = g1.h * s1 + (g2.h * s2 - g1.h * s1) * e;
+      const e = EASE(p), sc = L(s1, s2, e);
+      const bw = L(g1.w * s1, g2.w * s2, e), bh = L(g1.h * s1, g2.h * s2, e);
       els.scaler.style.width = px(bw); els.scaler.style.height = px(bh);
       els.rig.style.transform = `translate(${bw / 2}px, ${bh / 2}px) rotate(${deg * e}deg) scale(${sc}) translate(${-g1.w / 2}px, ${-g1.h / 2}px)`;
       screenFade(p < 0.5 ? 1 : (1 - (p - 0.5) / 0.5).toFixed(3), 0);
     };
-    // From p0 to p1 over the matching share of the turn's duration; a reversal runs it back from where it is.
-    const run = (p0, p1) => {
-      const t0 = performance.now(), dur = Math.max(1, MS.turn * Math.abs(p1 - p0));
-      const step = () => {
-        const k = Math.min(1, (performance.now() - t0) / dur);
-        show(p0 + (p1 - p0) * k);
-        if (k < 1) anim.raf = requestAnimationFrame(step); else finishTurn(anim);
-      };
-      anim.raf = requestAnimationFrame(step);
-    };
-    anim.reverse = () => { cancelAnimationFrame(anim.raf); anim.next = anim.from; anim.back = true; run(anim.p, 0); };
-    run(0, 1);
+    anim.reverse = () => turnRound(anim, MS.turn, show, finishTurn);
+    tween(anim, MS.turn, show, 0, 1, finishTurn);
   }
   function finishTurn(anim) {
     if (anim.done) return;
@@ -430,7 +448,7 @@
     state.anim = null; state.pose = anim.next;
     render();
     if (anim.back) screenFade(1, MS.out); else fadeIn(); // turned back: the same layout, so no fade from blank
-    requestAnimationFrame(() => { els.device.style.transition = ''; });
+    releaseDevice();
   }
   // Open ↔ Split View: same frame, different screen. A soft cross-fade.
   function swapTo(next) {
@@ -438,8 +456,7 @@
     state.anim = anim;
     screenFade(0, MS.out);
     anim.timer = setTimeout(() => finishSwap(anim), MS.out);
-    // Chosen back before the swap: fade the same screen back in.
-    anim.reverse = () => { anim.done = true; clearTimeout(anim.timer); state.anim = null; screenFade(1, MS.out); };
+    anim.reverse = () => fadeBack(anim);
   }
   function finishSwap(anim) {
     if (anim.done) return;
@@ -475,14 +492,13 @@
   // the page fades out through its colour, the frame flows to the new shape, the new page fades in.
   function morphTo(next) {
     const g1 = state.dims, g2 = geometry(poseById(next)), s1 = state.scale, s2 = fitScale(g2);
-    const anim = { raf: 0, timer: 0, kind: 'morph', next, from: state.pose, done: false, p: null };
+    const anim = { raf: 0, timer: 0, kind: 'morph', next, from: state.pose, done: false, back: false, p: null };
     state.anim = anim; els.hint.hidden = true;
     els.device.style.transition = 'none';
     screenFade(0, MS.out);
     // Changing display: the outer screen's column and island go too, rather than drift across the new shape.
     const chromeTo = (o) => { els.chrome.style.transition = `opacity ${MS.out}ms ease`; els.chrome.style.opacity = o; };
     chromeTo('0');
-    const L = (a, b, e) => a + (b - a) * e;
     const show = (p) => {
       anim.p = p;
       const e = EASE(p);
@@ -493,22 +509,12 @@
       els.scaler.style.width = px(w * sc); els.scaler.style.height = px(h * sc);
       els.rig.style.transform = `scale(${sc})`;
     };
-    const run = (p0, p1) => {
-      const t0 = performance.now(), dur = Math.max(1, MS.morph * Math.abs(p1 - p0));
-      const step = () => {
-        const k = Math.min(1, (performance.now() - t0) / dur);
-        show(p0 + (p1 - p0) * k);
-        if (k < 1) anim.raf = requestAnimationFrame(step); else finishMorph(anim);
-      };
-      anim.raf = requestAnimationFrame(step);
-    };
-    anim.timer = setTimeout(() => { els.seamA.hidden = els.seamB.hidden = true; run(0, 1); }, MS.out);
-    // Chosen back mid-way: still fading out, fade back in; already changing shape, flow back from where it is.
+    anim.timer = setTimeout(() => { els.seamA.hidden = els.seamB.hidden = true; tween(anim, MS.morph, show, 0, 1, finishMorph); }, MS.out);
+    // Chosen back mid-way: still fading out, fade back in (and bring back the Fold marker); already changing
+    // shape, flow back from where it is.
     anim.reverse = () => {
-      clearTimeout(anim.timer); cancelAnimationFrame(anim.raf);
-      anim.next = anim.from;
-      if (anim.p == null) { anim.done = true; state.anim = null; screenFade(1, MS.out); chromeTo('1'); requestAnimationFrame(() => { els.device.style.transition = ''; }); }
-      else run(anim.p, 0);
+      if (anim.p != null) return turnRound(anim, MS.morph, show, finishMorph);
+      fadeBack(anim); chromeTo('1'); fit(); releaseDevice();
     };
   }
   function finishMorph(anim) {
@@ -516,7 +522,7 @@
     anim.done = true; cancelAnimationFrame(anim.raf); clearTimeout(anim.timer);
     state.anim = null; state.pose = anim.next;
     render(); fadeIn();
-    requestAnimationFrame(() => { els.device.style.transition = ''; });
+    releaseDevice();
   }
 
   function changePose(next) {
@@ -524,12 +530,9 @@
     const q = new URLSearchParams(location.search); q.set('pose', next);
     // Back to where a move started, while it's still moving: it turns round from where it is (Apple's
     // interruptibility), instead of finishing first and then setting off again.
-    if (a && !a.done && next === a.from && (a.kind === 'fold' ? a.e != null : a.reverse)) {
+    if (a && !a.done && next === a.from && a.reverse) {
       state.target = next; history.replaceState(null, '', `?${q}`);
-      if (a.kind === 'fold') {
-        a.done = true; cancelAnimationFrame(a.raf); state.anim = null;
-        foldTo(next, a.dir === 'open' ? 'close' : 'open', 1 - a.e, a.dir === 'close' ? a.next : null, -a.v);
-      } else a.reverse();
+      a.reverse();
       return;
     }
     cancelFold();
@@ -586,7 +589,8 @@
     const thumb = () => {
       const sel = btns.find((x) => x.dataset.v === get());
       if (!sel || !container.offsetWidth) return;
-      [...track.children].forEach((i, k) => { i.style.width = px(btns[k].offsetWidth); });
+      const widths = btns.map((b) => b.offsetWidth); // read all, then write
+      [...track.children].forEach((i, k) => { i.style.width = px(widths[k]); });
       const l = sel.offsetLeft - 2;
       track.style.clipPath = `inset(0 ${track.offsetWidth - l - sel.offsetWidth}px 0 ${l}px round 9px)`;
     };
@@ -606,9 +610,8 @@
     });
     container.addEventListener('keydown', (e) => {
       if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
-      const list = [...container.querySelectorAll('[role=radio]')];
-      const i = list.findIndex((x) => x.getAttribute('aria-checked') === 'true');
-      const next = list[(i + (e.key === 'ArrowRight' ? 1 : list.length - 1)) % list.length];
+      const i = btns.findIndex((x) => x.getAttribute('aria-checked') === 'true');
+      const next = btns[(i + (e.key === 'ArrowRight' ? 1 : btns.length - 1)) % btns.length];
       next.focus(); next.click(); e.preventDefault();
     });
     sync();
@@ -641,13 +644,14 @@
   }
   // Safari's progress line in the address field (playground.css .pill::after): it creeps while a page loads
   // and completes when it has. The class lives on #chrome, which survives the bars being redrawn.
+  let loadedT = 0;
   function progress(on) {
     const c = els.chrome;
-    clearTimeout(state.loadedT);
+    clearTimeout(loadedT);
     c.classList.remove('loading', 'loaded');
     if (on) { void c.offsetWidth; c.classList.add('loading'); return; } // restart from empty
     c.classList.add('loaded');
-    state.loadedT = setTimeout(() => c.classList.remove('loaded'), 500);
+    loadedT = setTimeout(() => c.classList.remove('loaded'), 500);
   }
   async function onFrameLoad() {
     progress(false);
@@ -753,7 +757,7 @@
     if (e.key !== 'Escape') return;
     if (!els.sheet.hidden) closeSheet();
     else if (!els.menu.hidden) { toggleMenu(false); els.menuBtn.focus(); }
-    else if (!els.hint.hidden) hintOpen(false);
+    else if (els.hint.matches('.open, .hover, :has(:focus-visible)')) hintOpen(false); // only when the tip shows (the same states as .fold-tip's open rule in playground.css)
   });
   els.bg.addEventListener('input', () => { state.bgFromPage = false; state.bg = els.bg.value; applyColours(); });
   els.bgAuto.addEventListener('click', () => { state.bgFromPage = true; readPageColour(); });

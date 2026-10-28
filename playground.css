@@ -31,6 +31,7 @@ body {
   height: 100dvh;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr); /* never wider than the window, even mid-resize (WebKit reported a ResizeObserver loop) */
   overflow: hidden;
 }
 a { color: var(--accent); text-decoration: none; }
@@ -68,8 +69,8 @@ h1 { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; margin: 0; whit
 }
 /* A finger needs 44pt; the controls stay their size and only the touch area grows */
 @media (pointer: coarse) {
-  .seg button::before, .top .btn::before { content: ""; position: absolute; inset: -7px 0; }
-  .top .btn::before { inset: -5px 0; }
+  .seg button::before { content: ""; position: absolute; inset: -7px 0; }
+  .top .btn::before { content: ""; position: absolute; inset: -5px 0; }
 }
 #theme { display: inline-grid; }
 #theme svg { grid-area: 1 / 1; transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out); }
@@ -106,11 +107,10 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid 
 .glass { position: absolute; inset: 3px; border-radius: calc(var(--r-out, 58px) - 3px); background: #050506; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04); }
 .seam { position: absolute; background: #141416; border-radius: 1px; }
 .screen { position: absolute; overflow: hidden; background: var(--page-bg, #fff); border-radius: var(--r-screen, 38px); isolation: isolate; }
-.vp { position: absolute; overflow: hidden; background: var(--page-bg, #fff); z-index: 1; }
 /* Chromium bug workaround: after the device changes size and the page moves (outer screen → Split View), Chromium
    left the page's fixed elements drawn without their text until something repainted them. Keeping the page on its
    own layer prevents it; text sharpness and frame rate measured unchanged (DESIGN.md §Device). */
-.vp { will-change: transform; }
+.vp { position: absolute; overflow: hidden; background: var(--page-bg, #fff); z-index: 1; will-change: transform; }
 .vp iframe { display: block; width: 100%; height: 100%; border: 0; background: transparent; }
 .chrome { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
 .chrome .hit { pointer-events: auto; }
@@ -217,15 +217,15 @@ button.ic.dim { cursor: default; }
 .fold-tip {
   position: absolute; width: 260px; margin: 0; padding: 10px 12px; font-size: 13px; line-height: 1.45; color: var(--ink);
   background: var(--surface-solid); border-radius: 12px; box-shadow: 0 12px 32px -10px rgba(0, 0, 0, 0.3), 0 0 0 0.5px var(--line);
-  opacity: 0; visibility: hidden; pointer-events: none; transform: var(--tx, none) scale(0.97); transform-origin: top left;
+  opacity: 0; visibility: hidden; pointer-events: none; transform: var(--tip-x, translate(0)) scale(0.97); transform-origin: top left;
   transition: opacity 100ms var(--ease-out), transform 100ms var(--ease-out), visibility 0s 100ms;
 }
-.fold-hint.v .fold-tip { left: 50%; top: calc(100% + 4px); --tx: translateX(-50%); transform-origin: top center; }
+.fold-hint.v .fold-tip { left: 50%; top: calc(100% + 4px); --tip-x: translateX(-50%); transform-origin: top center; }
 .fold-hint.h .fold-tip { left: 0; top: calc(100% + 6px); }
 /* Open when pressed, on keyboard focus, or after a moment of mouse hover (.hover, set in playground.js);
    "shut" keeps it closed after a second press until the pointer or focus leaves */
 .fold-hint.open .fold-tip, .fold-hint:not(.shut):is(.hover, :has(:focus-visible)) .fold-tip {
-  opacity: 1; visibility: visible; transform: var(--tx, none);
+  opacity: 1; visibility: visible; transform: var(--tip-x, none);
   transition: opacity 150ms var(--ease-out), transform 150ms var(--ease-out), visibility 0s;
 }
 
@@ -275,7 +275,8 @@ button.ic.dim { cursor: default; }
 }
 .toolbar > * { transition: transform 260ms var(--ease-out), opacity 200ms var(--ease-out); }
 @starting-style { .toolbar > * { opacity: 0; } }
-.toolbar.flip::before, .toolbar.flip > * { transition: none; }
+.toolbar.flip::before { transition: none; }
+.toolbar.flip > * { transition: opacity 200ms var(--ease-out); } /* the slide waits; a newly shown group still fades in */
 .sep { width: 1px; height: 22px; background: var(--line); flex: none; }
 .seg { position: relative; display: flex; background: var(--fill); border-radius: 11px; padding: 2px; gap: 2px; }
 .seg button, .seg .on i {
@@ -353,6 +354,8 @@ tr.current td { font-weight: 600; }
 @keyframes enter { from { opacity: 0; transform: translateY(8px); } }
 body:not(.ready) .scaler, body:not(.ready) .dock > * { opacity: 0; }
 .ready .scaler, .ready .caption, .ready .toolbar { animation: enter 480ms var(--ease-out) backwards; }
+.ready .caption { animation-delay: 60ms; }
+.ready .toolbar { animation-delay: 120ms; }
 
 /* Light → dark is a full-screen brightness change: cross-fade it rather than cut (Apple, reduced motion guidance) */
 ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 250ms; }
@@ -370,13 +373,12 @@ body:not(.ready) .scaler, body:not(.ready) .dock > * { opacity: 0; }
     --fill: light-dark(rgba(120, 120, 128, 0.2), rgba(120, 120, 128, 0.38));
   }
 }
-.ready .caption { animation-delay: 60ms; }
-.ready .toolbar { animation-delay: 120ms; }
 
 /* Reduce Motion: no movement, but fades stay (DESIGN.md §Motion) */
 @media (prefers-reduced-motion: reduce) {
   .vp.glide, .switch::after, .seg .on > span { transition: none; }
   .btn:active { transform: none; }
-  .fold-tip, .menu, .sheet, #theme svg { transform: var(--tx, none) !important; }
+  .fold-tip { transform: var(--tip-x, none) !important; }
+  .menu, .sheet, #theme svg { transform: none !important; }
   .ready .scaler, .ready .caption, .ready .toolbar { animation-name: soft-in; }
 }

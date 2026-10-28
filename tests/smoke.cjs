@@ -18,6 +18,12 @@ const check = (name, ok, detail = '') => { console.log(`${ok ? '✓' : '✗'} ${
 
   const sample = async () => { for (let i = 0; i < 50; i++) { const f = page.frames().find((x) => x !== page.mainFrame()); if (f) { try { if (await f.evaluate(() => !!document.getElementById('live'))) return f; } catch {} } await page.waitForTimeout(100); } throw new Error('sample frame not found'); };
   const size = async () => (await sample()).evaluate(() => [innerWidth, innerHeight]);
+  const choose = async (pose, ms) => { await page.click(`#poses [data-v="${pose}"]`); await page.waitForTimeout(ms); };
+  // The device's rotation, read just before and just after choosing a pose, in one go so the turn can't move in between.
+  const rotAround = (pose) => page.evaluate((v) => {
+    const rot = () => +((/rotate\((-?[\d.]+)deg\)/.exec(document.getElementById('rig').style.transform) || [0, 0])[1]);
+    const a = rot(); document.querySelector(`#poses [data-v="${v}"]`).click(); return [a, rot()];
+  }, pose);
 
   // 1. Every pose hands the page WebKit's viewport, with bars and scrolled.
   await page.goto(BASE, { waitUntil: 'networkidle' });
@@ -33,10 +39,10 @@ const check = (name, ok, detail = '') => { console.log(`${ok ? '✓' : '✗'} ${
   await page.click('#bars [data-v="svh"]');
 
   // 2. Opening the device resizes through the mid-fold size, without a reload.
-  await page.click('#poses [data-v="closed-portrait"]'); await page.waitForTimeout(2400);
+  await choose('closed-portrait', 2400);
   const f = await sample();
   await f.evaluate(() => { window.__marks = 'kept'; window.__sizes = []; addEventListener('resize', () => window.__sizes.push(`${innerWidth}x${innerHeight}`)); });
-  await page.click('#poses [data-v="open-landscape"]'); await page.waitForTimeout(2400);
+  await choose('open-landscape', 2400);
   const seq = await f.evaluate(() => window.__sizes.join(' → '));
   check('opening passes through 466x498 and settles at 951x585', /466x498.*951x585/.test(seq), seq);
   check('opening does not reload the page', await f.evaluate(() => window.__marks === 'kept'));
@@ -58,21 +64,29 @@ const check = (name, ok, detail = '') => { console.log(`${ok ? '✓' : '✗'} ${
   check('flags on, folded: posture folded, 2 segments', r.posture === 'folded' && r.seg === '2', JSON.stringify(r));
   check('flags on, folded: grid gutter spans the fold (44px)', r.cols === 2 && r.gridGap === '44px', JSON.stringify(r));
   check('flags on, folded: CTA gap spans the fold (48px)', r.gap === '48px', r.gap);
-  await page.click('#poses [data-v="open-portrait"]'); await page.waitForTimeout(2400);
+  await choose('open-portrait', 2400);
   r = await probe();
   check('flags on, open tall, folded: still 2 segments', r.seg === '2', JSON.stringify(r));
-  await page.click('#poses [data-v="closed-portrait"]'); await page.waitForTimeout(2400);
+  await choose('closed-portrait', 2400);
   r = await probe();
   check('flags on, closed: continuous, 1 segment', r.posture === 'continuous' && r.seg === '1', JSON.stringify(r));
 
   // 4b. Chromium once drew the page's fixed notice without its text after folding into Split View
-  //     (playground.css, .vp will-change). A blank card compresses to ~1–2 KB as a PNG; with text it's ~7 KB+.
-  await page.click('#poses [data-v="closed-portrait"]'); await page.waitForTimeout(2600);
-  await page.click('#poses [data-v="split-view"]'); await page.waitForTimeout(3200);
-  const nbox = await page.evaluate(() => { const f = document.getElementById('frame'), r = f.getBoundingClientRect(), n = f.contentDocument.getElementById('notice').getBoundingClientRect(); return { x: r.left + n.left, y: r.top + n.top, width: n.width, height: n.height }; });
-  const nbytes = (await page.screenshot({ clip: nbox })).length;
-  check('after folding into Split View, the page\'s notice is drawn with its text', nbytes > 4000, `${nbytes} bytes`);
-  await page.click('#poses [data-v="closed-portrait"]'); await page.waitForTimeout(2600);
+  //     (playground.css, .vp will-change). Count the pixels inside the card that differ clearly from its
+  //     background: text gives hundreds, a blank card none.
+  await choose('closed-portrait', 2600);
+  await choose('split-view', 3200);
+  const nbox = await page.evaluate(() => { const f = document.getElementById('frame'), r = f.getBoundingClientRect(), n = f.contentDocument.getElementById('notice').getBoundingClientRect(); return { x: r.left + n.left + 16, y: r.top + n.top + 12, width: n.width - 32, height: n.height - 24 }; });
+  const ink = await page.evaluate(async (src) => {
+    const img = new Image(); img.src = src; await img.decode();
+    const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+    const g = c.getContext('2d'); g.drawImage(img, 0, 0);
+    const d = g.getImageData(0, 0, c.width, c.height).data, lum = (i) => 0.3 * d[i] + 0.59 * d[i + 1] + 0.11 * d[i + 2];
+    let n = 0; for (let i = 0; i < d.length; i += 4) if (Math.abs(lum(i) - lum(0)) > 60) n++;
+    return n;
+  }, 'data:image/png;base64,' + (await page.screenshot({ clip: nbox })).toString('base64'));
+  check('after folding into Split View, the page\'s notice is drawn with its text', ink > 200, `${ink} text pixels`);
+  await choose('closed-portrait', 2600);
 
   // 5. The sample is real: its readout matches what the page gets, and its notice goes when told.
   const sf = await sample();
@@ -82,7 +96,7 @@ const check = (name, ok, detail = '') => { console.log(`${ok ? '✓' : '✗'} ${
   check('sample notice dismisses on "Got it"', await sf.evaluate(() => document.getElementById('notice').classList.contains('gone')));
 
   // 6. The fold animation runs mid-way and leaves nothing behind.
-  await page.click('#poses [data-v="open-landscape"]'); await page.waitForTimeout(900);
+  await choose('open-landscape', 900);
   const mid = await page.evaluate(() => ({ fx: !document.getElementById('foldfx').hidden, rot: document.getElementById('flap').style.transform }));
   check('opening shows the cover mid-swing', mid.fx && /rotateY\((?!0deg|180deg)[\d.]+deg\)/.test(mid.rot), JSON.stringify(mid));
   await page.waitForTimeout(1500);
@@ -90,8 +104,8 @@ const check = (name, ok, detail = '') => { console.log(`${ok ? '✓' : '✗'} ${
   check('after opening, no overlay or clip remains', end.fx && !end.clip, JSON.stringify(end));
 
   // 6b. Poses that don't fold into each other morph instead: no cover, and the page ends at its size.
-  await page.click('#poses [data-v="closed-landscape"]'); await page.waitForTimeout(2400);
-  await page.click('#poses [data-v="open-landscape"]'); await page.waitForTimeout(600);
+  await choose('closed-landscape', 2400);
+  await choose('open-landscape', 600);
   check('Closed wide → Open morphs, without the fold cover', await page.evaluate(() => document.getElementById('foldfx').hidden));
   await page.waitForTimeout(1800);
   const [mw, mh] = await size();
@@ -100,8 +114,8 @@ const check = (name, ok, detail = '') => { console.log(`${ok ? '✓' : '✗'} ${
   check('after the morph, the page is fully revealed', shown === '1', shown);
 
   // 6c. Choosing the starting pose mid-fold turns the cover round from where it is, and it still lands clean.
-  await page.click('#poses [data-v="closed-portrait"]'); await page.waitForTimeout(2600);
-  await page.click('#poses [data-v="open-landscape"]'); await page.waitForTimeout(940);
+  await choose('closed-portrait', 2600);
+  await choose('open-landscape', 940);
   const turn = await page.evaluate(() => { // read, reverse and read again in one go, so the swing can't move in between
     const deg = () => +/(-?[\d.]+)deg/.exec(document.getElementById('flap').style.transform)[1];
     const a = deg(); document.querySelector('#poses [data-v="closed-portrait"]').click(); return [a, deg()];
@@ -113,24 +127,38 @@ const check = (name, ok, detail = '') => { console.log(`${ok ? '✓' : '✗'} ${
   check('the reversed fold lands closed, with nothing left behind', rev.fx && !rev.clip && rw === 382, JSON.stringify({ ...rev, rw }));
 
   // 6d. When the Fold control appears, the toolbar's groups slide over rather than jump.
-  const leftOf = () => page.evaluate(() => Math.round(document.getElementById('poses').getBoundingClientRect().left));
-  const l0 = await leftOf();
-  await page.click('#poses [data-v="open-landscape"]');
-  const path = [];
-  for (let i = 0; i < 12; i++) { await page.waitForTimeout(40); path.push(await leftOf()); }
-  await page.waitForTimeout(2200);
-  const l1 = await leftOf();
-  check('the toolbar slides to make room for the Fold control', path.filter((x) => x < l0 - 2 && x > l1 + 2).length >= 2, JSON.stringify({ l0, path, l1 }));
+  const slide = await page.evaluate(() => new Promise((done) => { // sampled every frame, in the page
+    const left = () => Math.round(document.getElementById('poses').getBoundingClientRect().left);
+    const l0 = left(), path = [], t0 = performance.now();
+    document.querySelector('#poses [data-v="open-landscape"]').click();
+    const tick = () => { path.push(left()); if (performance.now() - t0 < 1200) requestAnimationFrame(tick); else done({ l0, path }); };
+    requestAnimationFrame(tick);
+  }));
+  await page.waitForTimeout(1500);
+  const l1 = await page.evaluate(() => Math.round(document.getElementById('poses').getBoundingClientRect().left));
+  check('the toolbar slides to make room for the Fold control', slide.path.filter((x) => x < slide.l0 - 2 && x > l1 + 2).length >= 2, JSON.stringify({ ...slide, l1 }));
 
   // 6e. A turn chosen back mid-way turns back from where it is.
-  await page.click('#poses [data-v="open-portrait"]'); await page.waitForTimeout(350);
-  const tb = await page.evaluate(() => {
-    const rot = () => +((/rotate\((-?[\d.]+)deg\)/.exec(document.getElementById('rig').style.transform) || [0, 0])[1]);
-    const a = rot(); document.querySelector('#poses [data-v="open-landscape"]').click(); return [a, rot()];
-  });
+  await choose('open-portrait', 350);
+  const tb = await rotAround('open-landscape');
   await page.waitForTimeout(900);
   const [tw] = await size();
   check('a turn chosen back mid-way returns without finishing first', Math.abs(tb[0]) > 10 && Math.abs(tb[0] - tb[1]) < 1 && tw === 951, JSON.stringify({ tb, tw }));
+
+  // 6f. …and can turn round again: reverse, then reverse back, with no jump, landing on the last choice.
+  await choose('open-portrait', 350);
+  const r1 = await rotAround('open-landscape'); await page.waitForTimeout(120);
+  const r2 = await rotAround('open-portrait'); await page.waitForTimeout(1000);
+  const [t2w] = await size();
+  check('a turn can be reversed twice without a jump', Math.abs(r2[0]) > 5 && Math.abs(r2[0] - r2[1]) < 1 && t2w === 669, JSON.stringify({ r1, r2, t2w }));
+  check('the sideways fold tip scales in (its offset variable has a valid fallback)', (await page.evaluate(() => getComputedStyle(document.getElementById('foldTip')).transform)).startsWith('matrix(0.97'));
+  await choose('open-landscape', 1500);
+
+  // 6g. A morph chosen back while it is still fading out fades straight back, Fold marker and all.
+  await choose('closed-landscape', 80);
+  await choose('open-landscape', 600);
+  const mb = await page.evaluate(() => ({ marker: !document.getElementById('foldHint').hidden, op: getComputedStyle(document.getElementById('vp')).opacity, w: document.getElementById('frame').contentWindow.innerWidth }));
+  check('a morph reversed during its fade-out keeps the page and the Fold marker', mb.marker && mb.op === '1' && mb.w === 951, JSON.stringify(mb));
 
   // 7. Back, Forward and Reload: in-page links stay in the page and can be walked back; nothing escapes.
   const before = page.url();
@@ -164,6 +192,10 @@ const check = (name, ok, detail = '') => { console.log(`${ok ? '✓' : '✗'} ${
 
   // 9. Controls: the fold tip closes on a second press even under the pointer; the thumb sits on the chosen segment.
   const tip = () => page.evaluate(() => getComputedStyle(document.getElementById('foldTip')).opacity);
+  await page.keyboard.press('Escape'); // with nothing open: must not stop the tip opening on hover
+  await page.hover('#foldHintBtn'); await page.waitForTimeout(500);
+  check('after a stray Escape, hovering still opens the fold tip', (await tip()) === '1', await tip());
+  await page.mouse.move(5, 450); await page.waitForTimeout(300);
   await page.click('#foldHintBtn'); await page.waitForTimeout(300); const tipA = await tip();
   await page.click('#foldHintBtn'); await page.waitForTimeout(300); const tipB = await tip();
   check('the fold tip opens on a press and closes on the next', tipA === '1' && tipB === '0', `${tipA} ${tipB}`);
@@ -173,6 +205,16 @@ const check = (name, ok, detail = '') => { console.log(`${ok ? '✓' : '✗'} ${
     return Math.abs(b.left - (r.left + +m[2])) < 1 && Math.abs(b.right - (r.right - +m[1])) < 1;
   });
   check('the selected thumb lines up with the chosen pose', thumb);
+
+  // 9b. Opening a page from the sheet: the progress line starts from empty and creeps, rather than appearing at 90%.
+  await page.click('#openSite'); await page.waitForTimeout(300);
+  const sx = await page.evaluate(() => {
+    document.getElementById('useSample').click();
+    const t = getComputedStyle(document.querySelector('#chrome .pill, #chrome .mini'), '::after').transform;
+    return t === 'none' ? 1 : +/matrix\(([\d.]+)/.exec(t)[1];
+  });
+  check('a sheet load starts the progress line from empty', sx < 0.5, String(sx));
+  await page.waitForTimeout(1500);
 
   // 10. Reduce Motion: no fold, but the change still cross-fades.
   const rctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });

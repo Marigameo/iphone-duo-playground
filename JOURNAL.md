@@ -132,3 +132,31 @@ Checked, nothing pending: `poses.json` matches the skill's copy; the skills READ
 Xcode: only the Command Line Tools are on this Mac, so the skill's simulator script skips ("only the Command Line Tools are installed"). Installing Xcode 27.1 needs Mari's Apple ID, so it can't be done from here. It would let the skill's Safari pass run for the first time, and measure the numbers still marked estimated (the crease in Open tall, where Safari draws its bars).
 
 Size: 90,321 bytes. Smoke test 48 checks.
+
+## 14 · 2026-10-28 · Code review
+
+Mari: "start with code review on changes done so far, simplify code … this is just for demo/application kind of usage so we no need to optimise speed … Make sure nothing breaks"
+
+The playground diff (rounds 11–13) went to an independent reviewer, since Claude had written it. Every finding was checked against the code before acting. Fixed:
+- Reversing a morph during its fade-out left the Fold marker hidden.
+- A stray Escape stopped the fold tip opening on hover until the pointer had passed over and left.
+- The sideways fold tip lost its scale-in: `var(--tx, none) scale(0.97)` is invalid when the variable is unset, so its fallback is now `translate(0)` and the variable is `--tip-x`, no longer sharing a name with the toolbar's `--tx`.
+- The progress line appeared at 90% on a sheet load, because the address field is redrawn; it restarts on a redraw now.
+- A turn or morph could be reversed only once.
+- A WebKit "ResizeObserver loop" page error on window resizes, new since round 11. The root cause was the page's `auto` grid column growing with the device mid-resize; the column is now `minmax(0, 1fr)`. Deferring the observer also worked, but only hid the cause.
+
+Simplified: turn and morph share one `tween()`; one `hintOpen()` for every way the tip closes; the two `.vp` rules merged; the touch-target rules split instead of overridden; the entrance rules grouped.
+
+Kept on purpose: hover then press pins the tip (hover previews it, a press pins it, the next press unpins). The reviewer read this as a bug.
+
+Tests: two brittle checks replaced (the notice check counts text pixels instead of PNG bytes; the toolbar slide is sampled every frame in the page), and five new ones. 53 checks pass; six bugs planted back were each caught by their own check. GPU, WebKit and Split View checks pass. Size 90,848 bytes.
+
+Then `/simplify` (Mari: "Let's also run /simplify on both. Make sure it doesn't break any"). Four read-only reviewers (reuse, simplification, efficiency, altitude). Applied, all behaviour-preserving:
+- The fold now has its own `anim.reverse` like turn, morph and swap, so `changePose` has one reversal path instead of a fold-only branch. Its frame loop runs on the shared `tween()`.
+- `turnRound` drives its own tween; swap and morph share `fadeBack`; `L()` and `releaseDevice()` replace repeated inline code.
+- The toolbar fades a newly shown group in through `@starting-style` alone (`.flip` keeps the opacity transition), instead of an extra inline-opacity path.
+- Layout reads come before writes in the segment thumb and the toolbar slide; arrow keys reuse the button list.
+- The progress timer is a local next to `progress()`; the reduce-motion transform override is split so it no longer borrows the tip's variable.
+- Smoke test: `choose()` and `rotAround()` replace 17 click-and-wait pairs and a duplicated rotation read.
+
+Skipped: a CSS `:hover` delay for the tip (tried in round 11: clicks waited for it), a `@keyframes` progress line, rewriting the fold around `tween()`'s progress beyond the loop, parallel behaviour loads in the skill (noise in the comparison that sets severity), moving the user agent into `poses.json`. Smoke 53/53, GPU and WebKit checks clean, 90,800 bytes.
