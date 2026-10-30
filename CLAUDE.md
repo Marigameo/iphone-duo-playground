@@ -14,6 +14,7 @@ Owner: Mariappan (Mari), a design engineer. Pronouns: they/them unless told othe
 | `process/` | Frozen snapshots per round. **Never edit anything in it** |
 | `poses.json` | **The one source of truth for the numbers.** The page reads it; the skill vendors it. Change it here only, with a source |
 | `sample/` | A deliberately broken page, so visitors see what failure looks like without a URL |
+| `report/` | A copy of the fit-iphone-duo skill's sample report, served at `/report/`. The source is `../skills/skills/fit-iphone-duo/sample-report/`: regenerate it there, then copy `duo-report.html` to `report/index.html` and `shots/` alongside. Never edit it here |
 
 ## Keep in step
 

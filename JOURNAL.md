@@ -160,3 +160,9 @@ Then `/simplify` (Mari: "Let's also run /simplify on both. Make sure it doesn't 
 - Smoke test: `choose()` and `rotAround()` replace 17 click-and-wait pairs and a duplicated rotation read.
 
 Skipped: a CSS `:hover` delay for the tip (tried in round 11: clicks waited for it), a `@keyframes` progress line, rewriting the fold around `tween()`'s progress beyond the loop, parallel behaviour loads in the skill (noise in the comparison that sets severity), moving the user agent into `poses.json`. Smoke 53/53, GPU and WebKit checks clean, 90,800 bytes.
+
+## 15 · 2026-10-30 · The skill's sample report, live
+
+Mari: "yeah I guess we can move it as a live page itself"
+
+The fit-iphone-duo skill now writes an HTML report with a picture per finding and a level per item. GitHub doesn't render HTML in a repo, so the sample report for the skill's test site is served here at `/report/`, and the README links to it. It's a copy: the source, with the triage and the files to regenerate it, stays in the skills repo. Nothing in the playground itself changed, and the size guard doesn't count it.

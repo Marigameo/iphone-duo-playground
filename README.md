@@ -26,6 +26,10 @@ Source: [WebKit Features for Safari 27.1](https://webkit.org/blog/18486/webkit-f
 - **Safari's feature flags.** Safari 27.1 has the Device Posture and Viewport Segments APIs behind two flags. Turn them on in the ⋯ menu to see what a fold-aware page does when someone has switched them on. With them off, the APIs are absent, as in Safari by default.
 - **Export.** Copy a link to the exact view, or the five poses as Playwright presets for your own tests.
 
+## What the skill reports
+
+The [fit-iphone-duo skill](https://github.com/marigameo/skills/tree/main/skills/fit-iphone-duo) audits your site in WebKit and hands you a report like **[this sample →](https://marigameo.github.io/iphone-duo-playground/report/)**: one card per thing it found, with the crease drawn and the element outlined, sorted into what needs your answer, what your agent will pick, what's a safe fix and what to leave. The sample audits the skill's own test site.
+
 ## Limits, said plainly
 
 - **Your browser renders the page, not Safari.** The sizes are Safari's; the engine is whatever you're using. For WebKit itself, run the [fit-iphone-duo skill](https://github.com/marigameo/skills), which audits in Playwright's WebKit.
