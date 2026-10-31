@@ -65,7 +65,7 @@ The [fit-iphone-duo skill](https://github.com/marigameo/skills) takes a site fro
 
 ## Credits
 
-Built by [Mari](https://mariappan.netlify.app) with Claude Code. The numbers come from WebKit and Apple. Apple's [Human Interface Guidelines for iPhone Duo](https://developer.apple.com/design/human-interface-guidelines/designing-for-iphone-duo) and its Tech Talks shaped the drawing. Thanks to [duo-ready](https://github.com/gurovdigital/duo-ready) for showing early how much honesty about emulation matters.
+Built by [Mari](https://mariappan.netlify.app) with Claude Code. The numbers come from WebKit and Apple. Apple's [Human Interface Guidelines for iPhone Duo](https://developer.apple.com/design/human-interface-guidelines/designing-for-iphone-duo) and its Tech Talks shaped the drawing.
 
 iPhone is a trademark of Apple Inc. This project is not affiliated with or endorsed by Apple.
 
