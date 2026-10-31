@@ -33,7 +33,8 @@ The [fit-iphone-duo skill](https://github.com/marigameo/skills/tree/main/skills/
 ## Limits, said plainly
 
 - **Your browser renders the page, not Safari.** The sizes are Safari's; the engine is whatever you're using. For WebKit itself, run the [fit-iphone-duo skill](https://github.com/marigameo/skills), which audits in Playwright's WebKit.
-- **Some sites refuse to be framed.** They set `X-Frame-Options` or a CSP `frame-ancestors`, and stay blank here. Run the playground locally next to your site, or use the skill.
+- **Some sites refuse to be framed.** They set `X-Frame-Options` or a CSP `frame-ancestors`, and stay blank here. Run the playground locally next to your site, or use the skill. To allow the hosted playground, send `Content-Security-Policy: frame-ancestors 'self' https://marigameo.github.io` instead of `X-Frame-Options: DENY`.
+- **http addresses open as https** on the hosted playground, since an https page can't frame an http one. `localhost` stays as typed.
 - **The flags mode needs a page from the same origin**, such as the built-in sample or your site served next to a local copy of the playground.
 - **A few numbers are estimates, and the page marks them.** The crease's height inside the page on "Open, tall", where Safari draws each bar inside the screen, the fold region's width, and the corner radius. Each one is explained in [DESIGN.md](DESIGN.md).
 

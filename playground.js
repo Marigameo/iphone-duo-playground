@@ -71,9 +71,13 @@
     store.set('duo-theme', next);
   });
 
+  // An https page can't frame an http one (mixed content), so ask for the site's https version.
+  // Loopback stays as typed: browsers trust it, and a local dev server is rarely on https.
+  const secure = (u) => location.protocol === 'https:' && /^http:\/\/(?!(localhost|127\.0\.0\.1|\[::1\])([:/]|$))/i.test(u) ? `https://${u.slice(7)}` : u;
+
   const params = new URLSearchParams(location.search);
   if (params.get('pose')) state.pose = params.get('pose');
-  if (params.get('url')) state.url = params.get('url');
+  if (params.get('url')) state.url = secure(params.get('url'));
   if (params.get('flags') === '1') state.flags = true;
 
   const px = (n) => `${n}px`;
@@ -742,7 +746,7 @@
     let u = els.url.value.trim();
     if (!u) return;
     if (!/^https?:\/\//i.test(u)) u = `https://${u}`;
-    closeSheet(); load(u);
+    closeSheet(); load(secure(u));
   });
 
   // The menu.
